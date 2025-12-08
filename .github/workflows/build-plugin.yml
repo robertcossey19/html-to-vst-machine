@@ -4,7 +4,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-plugin:
+  # ======================
+  # LINUX BUILD (what you already have)
+  # ======================
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -45,16 +48,52 @@ jobs:
           cd builder/juce-plugin
           git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
 
-      - name: Configure CMake for JUCE plugin
+      - name: Configure CMake for JUCE plugin (Linux)
         run: |
           cmake -B build -S builder/juce-plugin -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build JUCE plugin (VST3)
+      - name: Build JUCE plugin (VST3) - Linux
         run: |
           cmake --build build --config Release --target HtmlToVstPlugin_VST3
 
-      - name: Upload entire build folder
+      - name: Upload entire Linux build folder
         uses: actions/upload-artifact@v4
         with:
-          name: HtmlToVstPlugin-build
+          name: HtmlToVstPlugin-linux-build
           path: build
+
+  # ======================
+  # MACOS BUILD (new job)
+  # ======================
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install JUCE build dependencies (macOS)
+        run: |
+          # Xcode is preinstalled on macos-latest runners.
+          # We just need CMake and Ninja.
+          brew update
+          brew install cmake ninja
+
+      - name: Clone JUCE into builder/juce-plugin/JUCE
+        run: |
+          cd builder/juce-plugin
+          git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Configure CMake for JUCE plugin (macOS)
+        run: |
+          cmake -B build -S builder/juce-plugin -G Xcode -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build JUCE plugin (VST3) - macOS
+        run: |
+          cmake --build build --config Release --target HtmlToVstPlugin_VST3
+
+      - name: Upload macOS VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: HtmlToVstPlugin-mac-vst3
+          path: build/HtmlToVstPlugin_artefacts/Release/VST3/*.vst3
