@@ -27,9 +27,15 @@ jobs:
             libxcursor-dev \
             libfreetype6-dev \
             libgl1-mesa-dev
-          # JUCE expects ft2build.h in /usr/include, but on Ubuntu it's in freetype2/
-          if [ -f /usr/include/freetype2/ft2build.h ] && [ ! -f /usr/include/ft2build.h ]; then
-            sudo ln -s /usr/include/freetype2/ft2build.h /usr/include/ft2build.h
+
+          # Fix freetype include layout so JUCE can find ft2build.h and ftheader.h
+          if [ -d /usr/include/freetype2 ]; then
+            if [ ! -e /usr/include/ft2build.h ] && [ -e /usr/include/freetype2/ft2build.h ]; then
+              sudo ln -s /usr/include/freetype2/ft2build.h /usr/include/ft2build.h
+            fi
+            if [ ! -d /usr/include/freetype ]; then
+              sudo ln -s /usr/include/freetype2 /usr/include/freetype
+            fi
           fi
 
       - name: Clone JUCE into builder/juce-plugin/JUCE
@@ -41,9 +47,7 @@ jobs:
 
       - name: Configure CMake for JUCE plugin
         run: |
-          cmake -B build -S builder/juce-plugin \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-I/usr/include/freetype2"
+          cmake -B build -S builder/juce-plugin -DCMAKE_BUILD_TYPE=Release
 
       - name: Build JUCE plugin (VST3)
         run: |
