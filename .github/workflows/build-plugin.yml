@@ -19,6 +19,7 @@ jobs:
             build-essential \
             cmake \
             ninja-build \
+            pkg-config \
             libasound2-dev \
             libx11-dev \
             libxinerama-dev \
@@ -32,11 +33,13 @@ jobs:
           cd builder/juce-plugin
           git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
           ls
-          ls JUCE
+          ls JUCE/modules
 
       - name: Configure CMake for JUCE plugin
         run: |
-          cmake -B build -S builder/juce-plugin -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -S builder/juce-plugin \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-I/usr/include/freetype2"
 
       - name: Build JUCE plugin (VST3)
         run: |
