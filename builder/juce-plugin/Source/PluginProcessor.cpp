@@ -36,15 +36,23 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 void HtmlToVstAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     juce::ignoreUnused (destData);
+    // You can write your plugin state into destData with a ValueTree / raw data later.
 }
 
 void HtmlToVstAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     juce::ignoreUnused (data, sizeInBytes);
+    // And restore your plugin state from data here later.
 }
 
 // This creates the editor instance
 juce::AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
 {
     return new HtmlToVstAudioProcessorEditor (*this);
+}
+
+// JUCE factory function: required so the plugin client can create your processor
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new HtmlToVstAudioProcessor();
 }
