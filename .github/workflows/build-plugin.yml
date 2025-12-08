@@ -26,15 +26,21 @@ jobs:
             libxrandr-dev \
             libxcursor-dev \
             libfreetype6-dev \
+            libfontconfig1-dev \
+            libcurl4-openssl-dev \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
             libgl1-mesa-dev
 
           # Fix freetype include layout so JUCE can find ft2build.h and ftheader.h
           if [ -d /usr/include/freetype2 ]; then
+            # Ensure /usr/include/ft2build.h exists
             if [ ! -e /usr/include/ft2build.h ] && [ -e /usr/include/freetype2/ft2build.h ]; then
               sudo ln -s /usr/include/freetype2/ft2build.h /usr/include/ft2build.h
             fi
-            if [ ! -d /usr/include/freetype ]; then
-              sudo ln -s /usr/include/freetype2 /usr/include/freetype
+            # Ensure /usr/include/freetype/config/... points to freetype2/freetype/config/...
+            if [ ! -d /usr/include/freetype ] && [ -d /usr/include/freetype2/freetype ]; then
+              sudo ln -s /usr/include/freetype2/freetype /usr/include/freetype
             fi
           fi
 
