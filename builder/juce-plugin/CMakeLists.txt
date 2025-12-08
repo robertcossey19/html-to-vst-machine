@@ -30,11 +30,13 @@ target_sources(HtmlToVstPlugin PRIVATE
     Source/PluginEditor.cpp
 )
 
-# For now, DO NOT use WebBrowserComponent or CURL to avoid extra deps
+# For now, DO NOT use WebBrowserComponent or CURL (no extra deps),
+# and disable VST2/VST3 automation compatibility to avoid the JUCE #error.
 target_compile_definitions(HtmlToVstPlugin
     PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
 )
 
 target_link_libraries(HtmlToVstPlugin
