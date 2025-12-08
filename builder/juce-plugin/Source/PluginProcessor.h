@@ -18,10 +18,15 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
-    // No programs for now
+    // Tell host we don't do MIDI
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+
+    // Editor
     bool hasEditor() const override { return true; }
     juce::AudioProcessorEditor* createEditor() override;
 
+    // Programs (we'll just have one)
     double getTailLengthSeconds() const override { return 0.0; }
 
     int getNumPrograms() override { return 1; }
@@ -30,6 +35,7 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
+    // State
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
