@@ -27,6 +27,10 @@ jobs:
             libxcursor-dev \
             libfreetype6-dev \
             libgl1-mesa-dev
+          # JUCE expects ft2build.h in /usr/include, but on Ubuntu it's in freetype2/
+          if [ -f /usr/include/freetype2/ft2build.h ] && [ ! -f /usr/include/ft2build.h ]; then
+            sudo ln -s /usr/include/freetype2/ft2build.h /usr/include/ft2build.h
+          fi
 
       - name: Clone JUCE into builder/juce-plugin/JUCE
         run: |
