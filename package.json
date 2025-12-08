@@ -1,0 +1,12 @@
+{
+  "name": "html-to-vst-machine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "api/server.js",
+  "scripts": {
+    "start": "node api/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}
