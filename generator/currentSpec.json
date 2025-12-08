@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "spec": {
+    "name": "AMPEX TAPE MACHINE",
+    "engine": "ampex_102",
+    "params": [
+      ...
+    ]
+  }
+}
