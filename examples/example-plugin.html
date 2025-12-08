@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Example Plugin</title>
+</head>
+
+<body>
+  <h1>Example Plugin UI</h1>
+
+  <!-- Example control -->
+  <input 
+    type="range"
+    data-param="drive"
+    data-type="knob"
+    data-min="0"
+    data-max="1"
+    data-default="0.5"
+  />
+
+  <button data-param="bypass" data-type="bool">Bypass</button>
+
+  <script>
+  /* @plugin
+  {
+    "name": "Example Plugin",
+    "engine": "auto",
+    "params": [
+      {
+        "id": "drive",
+        "label": "Drive",
+        "type": "knob",
+        "min": 0,
+        "max": 1,
+        "default": 0.5
+      },
+      {
+        "id": "bypass",
+        "label": "Bypass",
+        "type": "bool",
+        "default": false
+      }
+    ]
+  }
+  @endplugin */
+  </script>
+
+  <script>
+  // Example JS code — doesn't need to work.
+  // This file is ONLY to show the machine how plugins declare params.
+  </script>
+</body>
+</html>
