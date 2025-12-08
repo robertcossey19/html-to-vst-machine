@@ -30,9 +30,10 @@ target_sources(HtmlToVstPlugin PRIVATE
     Source/PluginEditor.cpp
 )
 
+# For now, DO NOT use WebBrowserComponent or CURL to avoid extra deps
 target_compile_definitions(HtmlToVstPlugin
     PRIVATE
-        JUCE_WEB_BROWSER=1           # enables WebBrowserComponent
+        JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
 )
 
