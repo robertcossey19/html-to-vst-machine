@@ -1,4 +1,4 @@
-name: Build Plugin (Stage 2 Dummy)
+name: Build Plugin (JUCE)
 
 on:
   # Manual trigger from the GitHub Actions tab
@@ -12,14 +12,42 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Make script executable
-        run: chmod +x builder/make-dummy-plugin.sh
+      - name: Install JUCE build dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            libasound2-dev \
+            libx11-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libfreetype6-dev \
+            libgl1-mesa-dev
 
-      - name: Run dummy build
-        run: ./builder/make-dummy-plugin.sh
+      - name: Clone JUCE into builder/juce-plugin/JUCE
+        run: |
+          cd builder/juce-plugin
+          git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
+          ls
+          ls JUCE
 
-      - name: Upload built plugin artifact
+      - name: Configure CMake for JUCE plugin
+        run: |
+          cmake -B build -S builder/juce-plugin -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build JUCE plugin (VST3)
+        run: |
+          cmake --build build --config Release --target HtmlToVstPlugin_VST3
+
+      - name: List build artefacts (for debugging)
+        run: |
+          ls -R build
+
+      - name: Upload built VST3 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyPlugin-vst3
-          path: build/MyPlugin.vst3
+          name: HtmlToVstPlugin-vst3
+          path: build/HtmlToVstPlugin_artefacts/Release/VST3/HtmlToVstPlugin.vst3
