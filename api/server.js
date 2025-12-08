@@ -1,7 +1,7 @@
 // api/server.js
 //
 // Tiny HTTP API for the machine.
-// Later, Render will run this. You do NOT have to run it locally.
+// Render runs this. You do NOT have to run it locally.
 //
 // POST /analyze
 // Body: raw HTML/JS text (e.g. CodePen export)
@@ -12,6 +12,17 @@ const { parsePluginSpecFromText } = require("../converter/parsePluginSpec");
 
 const app = express();
 
+// --- CORS so browser-based tester can talk to this API ---
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Accept raw text in the body (CodePen HTML/JS)
 app.use(express.text({ type: "*/*", limit: "1mb" }));
 
@@ -20,6 +31,7 @@ app.post("/analyze", (req, res) => {
 
   if (!text || typeof text !== "string" || !text.trim()) {
     return res.status(400).json({
+      ok: false,
       error: "Empty body. Send HTML/JS text for analysis."
     });
   }
@@ -46,6 +58,5 @@ app.get("/", (_req, res) => {
 // Start server (Render will hit `npm start` -> this runs)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  // This log matters only when running somewhere (Render, local, etc.)
   console.log(`API listening on port ${PORT}`);
 });
