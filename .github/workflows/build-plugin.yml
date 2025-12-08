@@ -1,0 +1,25 @@
+name: Build Plugin (Stage 2 Dummy)
+
+on:
+  # Manual trigger from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  build-plugin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Make script executable
+        run: chmod +x builder/make-dummy-plugin.sh
+
+      - name: Run dummy build
+        run: ./builder/make-dummy-plugin.sh
+
+      - name: Upload built plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyPlugin-vst3
+          path: build/MyPlugin.vst3
