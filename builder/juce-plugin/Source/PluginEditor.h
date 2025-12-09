@@ -1,24 +1,22 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_extra/juce_gui_extra.h>
 
 class HtmlToVstAudioProcessor;
 
-/**
- * Basic JUCE editor for the HtmlToVst plugin.
- * For now this is just a placeholder with a black background and some text.
- */
+// Editor that shows the embedded HTML UI in a WebView
 class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
     ~HtmlToVstAudioProcessorEditor() override;
 
-    void paint (juce::Graphics& g) override;
+    void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
     HtmlToVstAudioProcessor& processor;
+    juce::WebBrowserComponent webView;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
