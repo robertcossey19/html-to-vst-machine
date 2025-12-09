@@ -16,7 +16,7 @@ HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProc
     juce::String html = juce::String::fromUTF8 (BinaryData::ampex_ui_html,
                                                 BinaryData::ampex_ui_htmlSize);
 
-    // Easiest way: write HTML to a temp file and point the WebView at it
+    // Simple approach: write HTML to a temp file and point the WebView at it
     juce::File tempFile = juce::File::createTempFile ("ampex_ui.html");
     tempFile.replaceWithText (html);
 
