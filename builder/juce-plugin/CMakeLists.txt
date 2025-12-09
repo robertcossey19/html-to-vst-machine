@@ -1,50 +1,63 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(HtmlToVstPlugin VERSION 0.0.1)
+project(HtmlToVstPlugin VERSION 1.0.0)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Expect JUCE to be cloned into JUCE/ inside this folder by the workflow
+# JUCE setup
 add_subdirectory(JUCE)
 
+# =====================================================================
+# EMBEDDED HTML UI (Option B)
+# =====================================================================
+
+juce_add_binary_data(HtmlToVst_UI
+    SOURCES
+        Assets/UI/ampex_ui.html
+)
+
+# =====================================================================
+# PLUGIN DEFINITION
+# =====================================================================
+
 juce_add_plugin(HtmlToVstPlugin
-    COMPANY_NAME "HTMLToVST"
-    BUNDLE_ID    "com.htmltovst.plugin"
-    IS_SYNTH     FALSE
-    NEEDS_MIDI_INPUT FALSE
-    NEEDS_MIDI_OUTPUT FALSE
-    IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD TRUE
-
-    PLUGIN_MANUFACTURER_CODE HTVS
-    PLUGIN_CODE H2VT
-
+    COMPANY_NAME "ANALOGEXACT"
+    PLUGIN_MANUFACTURER_CODE ANEX
+    PLUGIN_CODE HTVP
     FORMATS VST3
     PRODUCT_NAME "HTML to VST Plugin"
+    VST3_CATEGORIES "Fx"
 )
+
+# =====================================================================
+# SOURCE FILES
+# =====================================================================
 
 target_sources(HtmlToVstPlugin PRIVATE
     Source/PluginProcessor.cpp
+    Source/PluginProcessor.h
     Source/PluginEditor.cpp
+    Source/PluginEditor.h
+    Source/GeneratedParams.h
 )
 
-# For now, DO NOT use WebBrowserComponent or CURL (no extra deps),
-# and disable VST2/VST3 automation compatibility to avoid the JUCE #error.
-target_compile_definitions(HtmlToVstPlugin
-    PRIVATE
-        JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0
-        JUCE_VST3_CAN_REPLACE_VST2=0
+# =====================================================================
+# LINK LIBRARIES
+# =====================================================================
+
+target_link_libraries(HtmlToVstPlugin PRIVATE
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    juce::juce_audio_devices
+    juce::juce_dsp
+    juce::juce_gui_extra
+    HtmlToVst_UI
 )
 
-target_link_libraries(HtmlToVstPlugin
-    PRIVATE
-        juce::juce_audio_utils
-        juce::juce_audio_processors
-        juce::juce_gui_extra
-        juce::juce_gui_basics
-        juce::juce_audio_basics
-        juce::juce_core
+# =====================================================================
+# NEEDED DEFINITIONS
+# =====================================================================
+
+target_compile_definitions(HtmlToVstPlugin PRIVATE
+    JUCE_WEB_BROWSER=1
+    JUCE_USE_CURL=1
+    JUCE_VST3_CAN_REPLACE_VST2=0
 )
