@@ -101,9 +101,6 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int numChannels = buffer.getNumChannels();
     const int numSamples  = buffer.getNumSamples();
 
-    // -----------------------------------------------------------------
-    // Retrieve parameters from APVTS
-    // -----------------------------------------------------------------
     auto getFloatParam = [this] (const juce::String& id, float fallback) -> float
     {
         if (auto* p = apvts.getRawParameterValue (id))
@@ -111,24 +108,10 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         return fallback;
     };
 
-    // These IDs must match your currentSpec.json / GeneratedParams.h
+    // These IDs must match currentSpec.json / GeneratedParams.h
     const float inDb   = getFloatParam ("inDb",   0.0f);
     const float outDb  = getFloatParam ("outDb",  0.0f);
     const float bias   = getFloatParam ("bias",   0.0f);
-
-    // For now we won't use the others yet; they'll drive the full Ampex DSP later
-    // const float speedIndex     = getFloatParam ("speed", 0.0f);
-    // const float fluxIndex      = getFloatParam ("flux",  1.0f); // etc...
-    // const float eqIndex        = getFloatParam ("eq",    0.0f);
-    // const float tapeTypeIndex  = getFloatParam ("tapeType", 1.0f);
-    // const float xfOn           = getFloatParam ("transformer", 1.0f);
-    // const float autoCalOn      = getFloatParam ("autoCal", 1.0f);
-    // const float headblockIndex = getFloatParam ("headblock", 0.0f);
-
-    // -----------------------------------------------------------------
-    // Simple DSP: input gain + output gain (dB)
-    // This is the placeholder until we port the entire Ampex engine.
-    // -----------------------------------------------------------------
 
     const float inGain  = juce::Decibels::decibelsToGain (inDb);
     const float outGain = juce::Decibels::decibelsToGain (outDb);
@@ -137,7 +120,7 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int ch = 0; ch < numChannels; ++ch)
         buffer.applyGain (ch, 0, numSamples, inGain);
 
-    // TODO: place full Ampex 102 DSP here, using bias, speed, flux, eq, etc.
+    // TODO: full Ampex 102 DSP goes here using bias, speed, flux, eq, tapeType, transformer, etc.
 
     // Apply output gain
     for (int ch = 0; ch < numChannels; ++ch)
@@ -148,7 +131,6 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
 void HtmlToVstAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Let APVTS handle state
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -167,4 +149,13 @@ void HtmlToVstAudioProcessor::setStateInformation (const void* data, int sizeInB
 juce::AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
 {
     return new HtmlToVstAudioProcessorEditor (*this);
+}
+
+//==============================================================================
+// JUCE factory function – REQUIRED so the VST3 can create your processor
+//==============================================================================
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new HtmlToVstAudioProcessor();
 }
