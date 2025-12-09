@@ -5,7 +5,7 @@ on:
 
 jobs:
   # ======================
-  # LINUX BUILD (what you already have)
+  # LINUX BUILD
   # ======================
   build-linux:
     runs-on: ubuntu-latest
@@ -13,6 +13,11 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Setup Node (for generator)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Install JUCE build dependencies (Linux)
         run: |
@@ -48,6 +53,10 @@ jobs:
           cd builder/juce-plugin
           git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
 
+      - name: Generate JUCE params from spec
+        run: |
+          node generator/generateJuceParams.js
+
       - name: Configure CMake for JUCE plugin (Linux)
         run: |
           cmake -B build -S builder/juce-plugin -DCMAKE_BUILD_TYPE=Release
@@ -63,7 +72,7 @@ jobs:
           path: build
 
   # ======================
-  # MACOS BUILD (new job)
+  # MACOS BUILD
   # ======================
   build-macos:
     runs-on: macos-latest
@@ -72,10 +81,15 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Setup Node (for generator)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install JUCE build dependencies (macOS)
         run: |
           # Xcode is preinstalled on macos-latest runners.
-          # We just need CMake and Ninja.
+          # We just need CMake and Ninja via Homebrew.
           brew update
           brew install cmake ninja
 
@@ -83,6 +97,10 @@ jobs:
         run: |
           cd builder/juce-plugin
           git clone --depth=1 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Generate JUCE params from spec
+        run: |
+          node generator/generateJuceParams.js
 
       - name: Configure CMake for JUCE plugin (macOS)
         run: |
