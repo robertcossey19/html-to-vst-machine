@@ -4,7 +4,7 @@
 
 class HtmlToVstAudioProcessor;
 
-// Editor that will host the embedded HTML UI via WebBrowserComponent
+// Editor that shows the embedded HTML UI via WebBrowserComponent
 class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
