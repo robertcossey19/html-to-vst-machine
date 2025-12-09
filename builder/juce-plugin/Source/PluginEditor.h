@@ -1,10 +1,10 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_gui_extra/juce_gui_extra.h>
 
 class HtmlToVstAudioProcessor;
 
-// Editor that shows the embedded HTML UI in a WebView
+// Editor that will host the embedded HTML UI via WebBrowserComponent
 class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
