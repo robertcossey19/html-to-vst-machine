@@ -9,17 +9,26 @@ HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProc
       processor (p),
       webView (juce::WebBrowserComponent::Options {})
 {
-    // Set plugin window size (tweak if needed)
+    // Set plugin window size (adjust if needed)
     setSize (1100, 650);
 
-    // Get the embedded HTML (Assets/UI/ampex_ui.html) from BinaryData
+    // Get the embedded HTML from BinaryData (Assets/UI/ampex_ui.html)
     juce::String html = juce::String::fromUTF8 (BinaryData::ampex_ui_html,
                                                 BinaryData::ampex_ui_htmlSize);
 
-    // Load the HTML directly into the WebView (no file:// URL, no external browser)
-    webView.loadHTML (html, juce::URL()); // base URL empty; all resources must be self-contained or use https://
+    // Write HTML to a temp file that WebBrowserComponent can load
+    juce::File tempFile = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                            .getChildFile ("analogexact_ampex_ui.html");
+
+    // Clean and write fresh
+    tempFile.deleteFile();
+    tempFile.create();
+    tempFile.replaceWithText (html);
 
     addAndMakeVisible (webView);
+
+    // Load the local HTML file (no remote URL needed)
+    webView.goToURL (tempFile.getFullPathName());
 }
 
 HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor() = default;
