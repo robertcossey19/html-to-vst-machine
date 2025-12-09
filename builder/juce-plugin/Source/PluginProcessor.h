@@ -24,6 +24,11 @@ public:
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using juce::AudioProcessor::processBlock;
 
+    // MIDI capabilities
+    bool acceptsMidi() const override    { return false; }
+    bool producesMidi() const override   { return false; }
+    bool isMidiEffect() const override   { return false; }
+
     //==============================================================================
     bool hasEditor() const override         { return true; }
     juce::AudioProcessorEditor* createEditor() override;
