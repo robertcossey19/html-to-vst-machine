@@ -45,8 +45,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout HtmlToVstAudioProcessor::cre
         }
         else if (type == "enum")
         {
-            // For now map enums to index space 0..N-1; GUI/engine will interpret indices
-            int numChoices = (int)p.maxValue + 1; // because we mapped maxValue = N-1 in generator
+            // enums are mapped to 0..N-1 index space by the generator
+            int numChoices = (int)p.maxValue + 1; // maxValue was set to N-1
             juce::StringArray choices;
             for (int j = 0; j < numChoices; ++j)
                 choices.add (juce::String (j));
@@ -60,7 +60,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout HtmlToVstAudioProcessor::cre
         }
         else
         {
-            // fallback: treat like float
+            // fallback: treat as float
             auto range = juce::NormalisableRange<float> ((float)p.minValue, (float)p.maxValue);
             params.push_back (std::make_unique<juce::AudioParameterFloat> (
                 paramID,
@@ -113,6 +113,9 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const float outDb  = getFloatParam ("outDb",  0.0f);
     const float bias   = getFloatParam ("bias",   0.0f);
 
+    // TODO later: use bias, speed, flux, eq, etc. for full Ampex DSP
+
+    // Simple placeholder DSP: input gain + output gain (both in dB)
     const float inGain  = juce::Decibels::decibelsToGain (inDb);
     const float outGain = juce::Decibels::decibelsToGain (outDb);
 
@@ -120,7 +123,7 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int ch = 0; ch < numChannels; ++ch)
         buffer.applyGain (ch, 0, numSamples, inGain);
 
-    // TODO: full Ampex 102 DSP goes here using bias, speed, flux, eq, tapeType, transformer, etc.
+    // TODO: full tape machine processing here
 
     // Apply output gain
     for (int ch = 0; ch < numChannels; ++ch)
@@ -152,7 +155,7 @@ juce::AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
 }
 
 //==============================================================================
-// JUCE factory function – REQUIRED so the VST3 can create your processor
+// JUCE factory function – REQUIRED so the plugin client can create your processor
 //==============================================================================
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
