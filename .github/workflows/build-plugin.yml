@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ======================
-  # MACOS BUILD ONLY
-  # ======================
   build-macos:
     runs-on: macos-latest
 
@@ -33,9 +30,11 @@ jobs:
         run: |
           node generator/generateJuceParams.js
 
-      - name: Configure CMake for JUCE plugin (macOS)
+      - name: Configure CMake for JUCE plugin (macOS, universal binary)
         run: |
-          cmake -B build -S builder/juce-plugin -G Xcode -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -S builder/juce-plugin -G Xcode \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Build JUCE plugin (VST3) - macOS
         run: |
