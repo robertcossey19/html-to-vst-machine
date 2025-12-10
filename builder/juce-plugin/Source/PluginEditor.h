@@ -1,22 +1,28 @@
 #pragma once
-#include <JuceHeader.h>
 
-class HtmlToVstPluginAudioProcessor;
+#include <juce_gui_extra/juce_gui_extra.h>
 
-class HtmlToVstPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
+// Forward declaration – defined in PluginProcessor.h
+class HtmlToVstAudioProcessor;
+
+//==============================================================================
+// Editor class: shows HTML UI via WebBrowserComponent using embedded HTML
+//==============================================================================
+
+class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
-    HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
-    ~HtmlToVstPluginAudioProcessorEditor() override;
+    HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
+    ~HtmlToVstAudioProcessorEditor() override;
 
-    void paint (juce::Graphics&) override;
+    void paint   (juce::Graphics&) override;
     void resized() override;
 
 private:
+    HtmlToVstAudioProcessor& processor;
+
     juce::WebBrowserComponent webView;
-    juce::String htmlData;
+    juce::String              htmlData;
 
-    HtmlToVstPluginAudioProcessor& processor;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
