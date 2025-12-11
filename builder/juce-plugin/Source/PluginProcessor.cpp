@@ -128,16 +128,16 @@ void HtmlToVstAudioProcessor::updateDSP()
     outputGain.setGainDecibels (outDbEff);
 
     // --- Bias asymmetry curve (even / odd harmonic balance) ---
-    biasShaper.function = [biasDb] (float x)
+    biasShaper.setFunction ([biasDb] (float x) -> float
     {
         const float baseK = 1.6f;
-        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f);
+        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f); // ±0.25
         const float kPos  = baseK;
         const float kNeg  = baseK / asym;
 
         return x >= 0.0f ? std::tanh (x * kPos)
                          : std::tanh (x * kNeg);
-    };
+    });
 
     // --- Tape EQ: NAB @ 15 ips with 456 bump ---
     {
@@ -166,12 +166,12 @@ void HtmlToVstAudioProcessor::updateDSP()
     }
 
     // --- Transformer “iron” shaper ---
-    transformerShape.function = [] (float x)
+    transformerShape.setFunction ([] (float x) -> float
     {
         constexpr float k    = 3.0f;
         constexpr float gain = 0.98f;
         return std::tanh (x * k) * gain;
-    };
+    });
 
     // --- HF bandwidth limit (~22 kHz at 768 kHz) ---
     {
@@ -242,30 +242,32 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
     if (buffer.getNumChannels() >= 2)
     {
         const int n = buffer.getNumSamples();
-        const float invN = (n > 0 ? 1.0f / (float) n : 0.0f);
-
-        double sumL = 0.0;
-        double sumR = 0.0;
-
-        const float* l = buffer.getReadPointer (0);
-        const float* r = buffer.getReadPointer (1);
-
-        for (int i = 0; i < n; ++i)
+        if (n > 0)
         {
-            const float lv = l[i];
-            const float rv = r[i];
-            sumL += (double) lv * (double) lv;
-            sumR += (double) rv * (double) rv;
+            const float* l = buffer.getReadPointer (0);
+            const float* r = buffer.getReadPointer (1);
+
+            double sumL = 0.0;
+            double sumR = 0.0;
+
+            for (int i = 0; i < n; ++i)
+            {
+                const float lv = l[i];
+                const float rv = r[i];
+                sumL += (double) lv * (double) lv;
+                sumR += (double) rv * (double) rv;
+            }
+
+            const float invN = 1.0f / (float) n;
+            const float rmsL = std::sqrt ((float) sumL * invN);
+            const float rmsR = std::sqrt ((float) sumR * invN);
+
+            const float dbL = Decibels::gainToDecibels (rmsL, -80.0f);
+            const float dbR = Decibels::gainToDecibels (rmsR, -80.0f);
+
+            currentVUL.store (dbL);
+            currentVUR.store (dbR);
         }
-
-        const float rmsL = std::sqrt ((float) sumL * invN);
-        const float rmsR = std::sqrt ((float) sumR * invN);
-
-        const float dbL = Decibels::gainToDecibels (rmsL, -80.0f);
-        const float dbR = Decibels::gainToDecibels (rmsR, -80.0f);
-
-        currentVUL.store (dbL);
-        currentVUR.store (dbR);
     }
 }
 
