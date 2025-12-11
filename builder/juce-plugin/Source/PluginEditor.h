@@ -1,26 +1,28 @@
 #pragma once
 
-#include <JuceHeader.h>
-#include "PluginProcessor.h"
+#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 
-class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
-                                       private juce::Timer
+class HtmlToVstPluginAudioProcessor;
+
+//==============================================================================
+// This is the editor (GUI) for the plugin. It hosts a WebBrowserComponent that
+// renders the ATR-102 HTML UI from BinaryData.
+class HtmlToVstPluginAudioProcessorEditor
+    : public juce::AudioProcessorEditor
 {
 public:
-    HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
-    ~HtmlToVstAudioProcessorEditor() override;
+    HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
+    ~HtmlToVstPluginAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    void timerCallback() override;
+    HtmlToVstPluginAudioProcessor& audioProcessor;
 
-    HtmlToVstAudioProcessor& processor;
-
-    // Web UI
+    // Web view that will load the HTML UI bundled via BinaryData.
     juce::WebBrowserComponent webView;
-    juce::File                tempHtmlFile;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
