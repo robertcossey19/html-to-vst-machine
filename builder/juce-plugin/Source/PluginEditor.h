@@ -19,7 +19,7 @@ private:
     HtmlToVstAudioProcessor& processor;
 
     // false = keep the page loaded even if the editor is hidden
-    juce::WebBrowserComponent webView { false };
+    juce::WebBrowserComponent webView;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
