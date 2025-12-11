@@ -1,24 +1,20 @@
 #pragma once
 
-#include <juce_gui_extra/juce_gui_extra.h>   // for juce::Component, juce::WebBrowserComponent, etc.
-#include "PluginProcessor.h"                 // HtmlToVstAudioProcessor declaration
+#include <juce_gui_extra/juce_gui_extra.h>
+#include "PluginProcessor.h"
 
 class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
 public:
-    explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
+    HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
     ~HtmlToVstAudioProcessorEditor() override;
 
-    // JUCE Editor overrides
-    void paint   (juce::Graphics& g) override;
+    void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    // Reference back to the processor
-    HtmlToVstAudioProcessor& audioProcessor;
+    HtmlToVstAudioProcessor& processor;
+    std::unique_ptr<juce::WebBrowserComponent> webView;
 
-    // Our embedded UI is drawn with a JUCE WebBrowserComponent
-    juce::WebBrowserComponent webView;
-
-    JUCE_DECLARE_NON_COPYABLE_WITHOUT_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
