@@ -45,7 +45,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // VU meter values in dB (approx. -80..+12)
+    // VU meter values in dB (approx. -80..+12) for the HTML UI
     float getCurrentVUL() const noexcept { return currentVUL.load(); }
     float getCurrentVUR() const noexcept { return currentVUR.load(); }
 
@@ -68,7 +68,7 @@ private:
     juce::dsp::IIR::Filter<float>  lowpassOut;
     juce::dsp::Gain<float>         outputGain;
 
-    // Block RMS (dB) for the HTML VU meters
+    // Block RMS (dB) for the VU meters
     std::atomic<float> currentVUL { 0.0f };
     std::atomic<float> currentVUR { 0.0f };
 
