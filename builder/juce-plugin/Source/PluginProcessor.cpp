@@ -3,6 +3,9 @@
 
 using namespace juce;
 
+// Global bias value used by the non-capturing bias shaper lambda
+static float gBiasDb = 1.8f;
+
 //==============================================================================
 
 HtmlToVstAudioProcessor::HtmlToVstAudioProcessor()
@@ -119,11 +122,15 @@ void HtmlToVstAudioProcessor::updateDSP()
     headroomGain.setGainLinear (headroomLin);
     outputGain.setGainDecibels (outDbEff);
 
+    // keep global bias value in sync (in case you make it param-driven later)
+    gBiasDb = biasDb;
+
     // --- Bias curve / asymmetry (matches WebAudio createBiasCurve) ---
-    biasShaper.functionToUse = [biasDb] (float x)
+    // non-capturing lambda so it can convert to float(*)(float)
+    biasShaper.functionToUse = [] (float x)
     {
         const float baseK = 1.6f;
-        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f);
+        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, gBiasDb * 0.05f);
         const float kPos  = baseK;
         const float kNeg  = baseK / asym;
 
