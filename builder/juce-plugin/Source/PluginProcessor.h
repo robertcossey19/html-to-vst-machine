@@ -1,7 +1,8 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_dsp/juce_dsp.h>
+#include "JuceHeader.h"
+
+//==============================================================================
 
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
@@ -10,8 +11,7 @@ public:
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
-    // These signatures MUST match juce_audio_processors_headless::AudioProcessor
-
+    // AudioProcessor basic info
     const juce::String getName() const override;
 
     bool acceptsMidi() const override;
@@ -19,17 +19,19 @@ public:
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
 
+    //==============================================================================
+    // We don’t actually use programs, but JUCE requires these.
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
 
+    //==============================================================================
    #if ! JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
    #endif
 
-    //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
@@ -43,40 +45,37 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // VU meters exposed to the editor (in dB)
-    std::atomic<float> currentVUL { 0.0f };
-    std::atomic<float> currentVUR { 0.0f };
-
-    // Convenience getters the editor can call
-    float getCurrentVUL() const noexcept { return currentVUL.load(); }
-    float getCurrentVUR() const noexcept { return currentVUR.load(); }
+    //==============================================================================
+    // VU values for the HTML UI (in dB, RMS, post-processing, post-crosstalk).
+    float getCurrentVUL() const noexcept { return currentVUL; }
+    float getCurrentVUR() const noexcept { return currentVUR; }
 
 private:
     void updateDSP();
 
-    double lastSampleRate { 44100.0 };
+    //==============================================================================
+    double currentSampleRate = 44100.0;
+    int    numChannels       = 2;
 
-    // 16× oversampling core
+    // 16x oversampling: 2^4 = 16
     juce::dsp::Oversampling<float> oversampling;
 
-    // Gain stages (mirror WebAudio graph)
+    // Core gain stages
     juce::dsp::Gain<float> inputGain;
     juce::dsp::Gain<float> fluxGain;
     juce::dsp::Gain<float> headroomGain;
-    juce::dsp::Gain<float> repro;
-    juce::dsp::Gain<float> monitorRe;
-    juce::dsp::Gain<float> outGain;
-    juce::dsp::Gain<float> xfTrim;
+    juce::dsp::Gain<float> outputGain;
 
-    // Filters / EQ
-    juce::dsp::IIR::Filter<float> biasHF;    // bias high-shelf tilt
-    juce::dsp::IIR::Filter<float> headBump;  // LF bump
-    juce::dsp::IIR::Filter<float> deemph;    // repro high shelf
-    juce::dsp::IIR::Filter<float> lpOut;     // output lowpass
+    // Tape non-linearity and EQ
+    juce::dsp::WaveShaper<float> biasShaper;         // bias symmetry / odd-even balance
+    juce::dsp::IIR::Filter<float> headBump;          // LF head bump
+    juce::dsp::IIR::Filter<float> reproHighShelf;    // repro HF shelf (NAB / 15 ips)
+    juce::dsp::WaveShaper<float> transformerShape;   // output transformer saturation
+    juce::dsp::IIR::Filter<float> lowpassOut;        // final bandwidth limit
 
-    // Non-linear stages
-    juce::dsp::WaveShaper<float> biasShaper;       // bias asymmetry
-    juce::dsp::WaveShaper<float> transformerShape; // output transformer sim
+    // VU state (in dB)
+    float currentVUL = -80.0f;
+    float currentVUR = -80.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessor)
 };
