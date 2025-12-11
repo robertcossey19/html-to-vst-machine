@@ -10,15 +10,17 @@ public:
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
-    // NOTE: these MUST match the headless AudioProcessor signature:
-    // * no "const" at the end
-    // * return type "const String" for getName/getProgramName
+
+    // NOTE: These signatures must match juce_audio_processors_headless::AudioProcessor
+
+    // getName is non-const in this headless API
     const juce::String getName() override;
 
-    bool acceptsMidi() override;
-    bool producesMidi() override;
-    bool isMidiEffect() override;
-    double getTailLengthSeconds() override;
+    // The following are const in headless AudioProcessor:
+    bool acceptsMidi() const override;
+    bool producesMidi() const override;
+    bool isMidiEffect() const override;
+    double getTailLengthSeconds() const override;
 
     int getNumPrograms() override;
     int getCurrentProgram() override;
