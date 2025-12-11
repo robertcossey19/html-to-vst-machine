@@ -1,17 +1,16 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-#include <cmath>
+using namespace juce;
 
 //==============================================================================
 
 HtmlToVstAudioProcessor::HtmlToVstAudioProcessor()
-    : juce::AudioProcessor (juce::AudioProcessor::BusesProperties()
-                                .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                                .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      oversampling (2, 4,
-                    juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
-                    true)
+   : AudioProcessor (
+        BusesProperties()
+            .withInput  ("Input",  AudioChannelSet::stereo(), true)
+            .withOutput ("Output", AudioChannelSet::stereo(), true)
+     )
 {
 }
 
@@ -19,30 +18,25 @@ HtmlToVstAudioProcessor::~HtmlToVstAudioProcessor() = default;
 
 //==============================================================================
 
-const juce::String HtmlToVstAudioProcessor::getName() const
-{
-    return JucePlugin_Name;
-}
+const String HtmlToVstAudioProcessor::getName() const                  { return JucePlugin_Name; }
+bool HtmlToVstAudioProcessor::acceptsMidi() const                      { return false; }
+bool HtmlToVstAudioProcessor::producesMidi() const                     { return false; }
+bool HtmlToVstAudioProcessor::isMidiEffect() const                     { return false; }
+double HtmlToVstAudioProcessor::getTailLengthSeconds() const           { return 0.0; }
 
-bool HtmlToVstAudioProcessor::acceptsMidi() const       { return false; }
-bool HtmlToVstAudioProcessor::producesMidi() const      { return false; }
-bool HtmlToVstAudioProcessor::isMidiEffect() const      { return false; }
-double HtmlToVstAudioProcessor::getTailLengthSeconds() const { return 0.0; }
-
-int  HtmlToVstAudioProcessor::getNumPrograms()              { return 1; }
-int  HtmlToVstAudioProcessor::getCurrentProgram()           { return 0; }
-void HtmlToVstAudioProcessor::setCurrentProgram (int)       {}
-const juce::String HtmlToVstAudioProcessor::getProgramName (int) { return {}; }
-void HtmlToVstAudioProcessor::changeProgramName (int, const juce::String&) {}
+int HtmlToVstAudioProcessor::getNumPrograms()                          { return 1; }
+int HtmlToVstAudioProcessor::getCurrentProgram()                       { return 0; }
+void HtmlToVstAudioProcessor::setCurrentProgram (int)                  {}
+const String HtmlToVstAudioProcessor::getProgramName (int)             { return {}; }
+void HtmlToVstAudioProcessor::changeProgramName (int, const String&)   {}
 
 //==============================================================================
 
 #if ! JucePlugin_PreferredChannelConfigurations
-bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const
+bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // stereo in / stereo out only
-    if (layouts.getMainInputChannelSet()  != juce::AudioChannelSet::stereo()
-     || layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    if (layouts.getMainInputChannelSet()  != AudioChannelSet::stereo()
+     || layouts.getMainOutputChannelSet() != AudioChannelSet::stereo())
         return false;
 
     return true;
@@ -54,33 +48,31 @@ bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const juce::AudioProcessor
 void HtmlToVstAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
-    numChannels       = juce::jmax (1, getTotalNumOutputChannels());
+    numChannels       = jmax (1, getTotalNumOutputChannels());
 
-    const auto factor = (size_t) oversampling.getOversamplingFactor();
+    const auto osFactor = (uint32) oversampling.getOversamplingFactor();
 
-    juce::dsp::ProcessSpec spec;
-    spec.sampleRate       = currentSampleRate * (double) factor;
-    spec.maximumBlockSize = (juce::uint32) (samplesPerBlock * (int) factor);
-    spec.numChannels      = (juce::uint32) numChannels;
+    dsp::ProcessSpec spec;
+    spec.sampleRate       = currentSampleRate * (double) osFactor;
+    spec.maximumBlockSize = (uint32) (samplesPerBlock * osFactor);
+    spec.numChannels      = (uint32) numChannels;
 
     oversampling.reset();
     oversampling.initProcessing ((size_t) samplesPerBlock);
-
-    inputGain.reset();
-    fluxGain.reset();
-    headroomGain.reset();
-    headBump.reset();
-    reproHighShelf.reset();
-    lowpassOut.reset();
-    outputGain.reset();
 
     inputGain.prepare       (spec);
     fluxGain.prepare        (spec);
     headroomGain.prepare    (spec);
     headBump.prepare        (spec);
     reproHighShelf.prepare  (spec);
+    biasShaper.prepare      (spec);
+    transformerShape.prepare(spec);
     lowpassOut.prepare      (spec);
     outputGain.prepare      (spec);
+
+    headBump.reset();
+    reproHighShelf.reset();
+    lowpassOut.reset();
 
     updateDSP();
 }
@@ -101,34 +93,47 @@ void HtmlToVstAudioProcessor::updateDSP()
 
     // ---- DEFAULT CALIBRATION TO MATCH WEB VERSION ----
     //
-    // Speed:     15 ips
-    // Flux:      250 nWb/m  (~ +2.6 dB)
-    // Tape:      456
-    // Headroom:  -12 dB
-    // UI Input:  0 dB (but record path has -5 dB offset)
-    // UI Output: 0 dB, +1 dB makeup for transformer core
+    // Speed:      15 ips
+    // Flux:       250 nWb/m
+    // Tape:       456
+    // Headroom:   -12 dB
+    // Input UI:   0 dB, but record path had -5 dB offset
+    // Output UI:  0 dB
     //
     const float uiInputDb      = 0.0f;
     const float uiOutputDb     = 0.0f;
-    const float inputOffsetDb  = -5.0f;     // UI 0 dB = -5 dB at record path
+    const float inputOffsetDb  = -5.0f;
     const float headroomDb     = -12.0f;
-    const float fluxDb         =  2.6f;     // 250 nWb/m
-    const float outMakeupDb    =  1.0f;     // transformer & flux compensation
+    const float fluxDb         =  2.6f;    // 250 nWb/m ~= +2.6 dB
+    const float biasDb         =  1.8f;
 
-    const float inputDbEff = uiInputDb + inputOffsetDb;
-    const float inGainLin  = juce::Decibels::decibelsToGain (inputDbEff);
-    const float fluxLin    = juce::Decibels::decibelsToGain (fluxDb);
-    const float headroomLin= juce::Decibels::decibelsToGain (headroomDb);
-    const float outDbEff   = uiOutputDb + outMakeupDb;
+    const float inputDbEff  = uiInputDb + inputOffsetDb;
+    const float inGainLin   = Decibels::decibelsToGain (inputDbEff);
+    const float fluxLin     = Decibels::decibelsToGain (fluxDb);
+    const float headroomLin = Decibels::decibelsToGain (headroomDb);
+    const float outMakeupDb = 1.0f;   // transformer + flux comp
+    const float outDbEff    = uiOutputDb + outMakeupDb;
 
     inputGain.setGainLinear    (inGainLin);
     fluxGain.setGainLinear     (fluxLin);
     headroomGain.setGainLinear (headroomLin);
     outputGain.setGainDecibels (outDbEff);
 
-    using Coeff = juce::dsp::IIR::Coefficients<float>;
+    // --- Bias curve / asymmetry (matches WebAudio createBiasCurve) ---
+    biasShaper.functionToUse = [biasDb] (float x)
+    {
+        const float baseK = 1.6f;
+        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f);
+        const float kPos  = baseK;
+        const float kNeg  = baseK / asym;
 
-    // --- Head bump (NAB-style) + extra for 456 ---
+        return x >= 0.0f ? std::tanh (x * kPos)
+                         : std::tanh (x * kNeg);
+    };
+
+    // --- Tape EQ: head bump + repro shelf (NAB @ 15 ips, 456) ---
+    using Coeff = dsp::IIR::Coefficients<float>;
+
     {
         const float bumpFreq = 80.0f;
         const float bumpQ    = 1.1f;
@@ -137,12 +142,11 @@ void HtmlToVstAudioProcessor::updateDSP()
         auto bumpCoeffs = Coeff::makePeakFilter (osRate,
                                                  bumpFreq,
                                                  bumpQ,
-                                                 juce::Decibels::decibelsToGain (bumpGain));
+                                                 Decibels::decibelsToGain (bumpGain));
 
         headBump.coefficients = bumpCoeffs;
     }
 
-    // --- Repro high shelf (NAB @ 15 ips) ---
     {
         const float shelfFreq = 3180.0f;
         const float shelfQ    = 0.707f;
@@ -151,12 +155,20 @@ void HtmlToVstAudioProcessor::updateDSP()
         auto shelfCoeffs = Coeff::makeHighShelf (osRate,
                                                  shelfFreq,
                                                  shelfQ,
-                                                 juce::Decibels::decibelsToGain (shelfDb));
+                                                 Decibels::decibelsToGain (shelfDb));
 
         reproHighShelf.coefficients = shelfCoeffs;
     }
 
-    // --- Output bandwidth limit ~22 kHz at 768 kHz oversampled ---
+    // --- Transformer output curve (matches createTransformerOutCurve) ---
+    transformerShape.functionToUse = [] (float x)
+    {
+        constexpr float k    = 3.0f;
+        constexpr float gain = 0.98f;
+        return std::tanh (x * k) * gain;
+    };
+
+    // --- Output LPF ~22 kHz at 768 kHz OS ---
     {
         const float lpFreq = 22000.0f;
         auto lpCoeffs = Coeff::makeLowPass (osRate, lpFreq);
@@ -166,11 +178,38 @@ void HtmlToVstAudioProcessor::updateDSP()
 
 //==============================================================================
 
-void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                            juce::MidiBuffer& midi)
+void HtmlToVstAudioProcessor::updateVuFromBuffer (AudioBuffer<float>& buffer)
 {
-    juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused (midi);
+    const int numSamples = buffer.getNumSamples();
+    if (numSamples <= 0)
+        return;
+
+    auto calcDb = [numSamples] (const float* data) -> float
+    {
+        double sum = 0.0;
+        for (int i = 0; i < numSamples; ++i)
+            sum += (double) data[i] * (double) data[i];
+
+        auto rms = std::sqrt (sum / jmax (1, numSamples));
+        return Decibels::gainToDecibels ((float) rms, -100.0f);
+    };
+
+    const float lDb = buffer.getNumChannels() > 0 ? calcDb (buffer.getReadPointer (0))
+                                                 : -90.0f;
+    const float rDb = buffer.getNumChannels() > 1 ? calcDb (buffer.getReadPointer (1))
+                                                 : lDb;
+
+    currentVUL.store (lDb);
+    currentVUR.store (rDb);
+}
+
+//==============================================================================
+
+void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
+                                            MidiBuffer& midi)
+{
+    ScopedNoDenormals noDenormals;
+    ignoreUnused (midi);
 
     const int totalNumInputChannels  = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
@@ -181,69 +220,35 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (buffer.getNumChannels() == 0)
         return;
 
-    juce::dsp::AudioBlock<float> block (buffer);
+    dsp::AudioBlock<float> block (buffer);
 
     // --- 16x oversampling up ---
     auto osBlock = oversampling.processSamplesUp (block);
-    juce::dsp::ProcessContextReplacing<float> context (osBlock);
+    dsp::ProcessContextReplacing<float> context (osBlock);
 
-    // Core gain structure in the oversampled domain
+    // --- ATR-102 style chain @ 768 kHz ---
     inputGain.process       (context);
     fluxGain.process        (context);
     headroomGain.process    (context);
-
-    // --- Bias + transformer waveshaping (manual, no WaveShaper::function) ---
-    {
-        const auto numCh      = osBlock.getNumChannels();
-        const auto numSamples = osBlock.getNumSamples();
-
-        // Bias asymmetry curve (from WebAudio version)
-        const float baseK = 1.6f;
-        const float asym  = 1.0f - juce::jlimit (-0.25f, 0.25f, biasDb * 0.05f);
-        const float kPos  = baseK;
-        const float kNeg  = baseK / asym;
-
-        for (size_t ch = 0; ch < numCh; ++ch)
-        {
-            float* data = osBlock.getChannelPointer (ch);
-
-            for (size_t i = 0; i < numSamples; ++i)
-            {
-                float x = data[i];
-
-                // Bias asymmetry – under/over-bias alters even/odd balance
-                float shaped = (x >= 0.0f ? std::tanh (x * kPos)
-                                          : std::tanh (x * kNeg));
-
-                // Transformer core (moderate 3rd/5th emphasis)
-                constexpr float transformerK    = 3.0f;
-                constexpr float transformerGain = 0.98f;
-                shaped = std::tanh (shaped * transformerK) * transformerGain;
-
-                data[i] = shaped;
-            }
-        }
-    }
-
-    // --- Head & repro EQ @ 768 kHz ---
-    headBump.process       (context);
-    reproHighShelf.process (context);
-    lowpassOut.process     (context);
-    outputGain.process     (context);
+    biasShaper.process      (context);
+    headBump.process        (context);
+    reproHighShelf.process  (context);
+    transformerShape.process(context);
+    lowpassOut.process      (context);
+    outputGain.process      (context);
 
     // --- Downsample back to project rate ---
     oversampling.processSamplesDown (block);
 
-    // --- Stereo crosstalk matrix (post-processing at session rate) ---
+    // --- Stereo crosstalk matrix (after downsampling, matches WebAudio) ---
     auto* left  = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
 
-    const int n = buffer.getNumSamples();
-
     if (right != nullptr)
     {
-        const float ct   = juce::Decibels::decibelsToGain (-40.0f); // ~-40 dB L<->R
-        const float main = 1.0f - ct;                               // keep level ≈ unity
+        const int n = buffer.getNumSamples();
+        const float ct   = Decibels::decibelsToGain (-40.0f);   // ~ -40 dB
+        const float main = 1.0f - ct;                           // keep unity-ish
 
         for (int i = 0; i < n; ++i)
         {
@@ -255,31 +260,8 @@ void HtmlToVstAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // --- VU RMS (linear) for left / right ---
-    {
-        double sumL = 0.0;
-        double sumR = 0.0;
-
-        for (int i = 0; i < n; ++i)
-        {
-            const float l = left[i];
-            sumL += (double) l * (double) l;
-
-            if (right != nullptr)
-            {
-                const float r = right[i];
-                sumR += (double) r * (double) r;
-            }
-        }
-
-        const double denom = (double) juce::jmax (1, n);
-        const float rmsL = std::sqrt ((float) (sumL / denom));
-        const float rmsR = right != nullptr ? std::sqrt ((float) (sumR / denom))
-                                            : rmsL;
-
-        currentVUL.store (rmsL);
-        currentVUR.store (rmsR);
-    }
+    // --- Update VU (dB RMS) for UI bridge ---
+    updateVuFromBuffer (buffer);
 }
 
 //==============================================================================
@@ -289,27 +271,26 @@ bool HtmlToVstAudioProcessor::hasEditor() const
     return true;
 }
 
-juce::AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
+AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
 {
     return new HtmlToVstAudioProcessorEditor (*this);
 }
 
 //==============================================================================
 
-void HtmlToVstAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+void HtmlToVstAudioProcessor::getStateInformation (MemoryBlock& destData)
 {
-    // For now: no parameters, just an ID blob.
-    juce::MemoryOutputStream (destData, true).writeInt ((int) 0x41545231); // "ATR1"
+    MemoryOutputStream (destData, true).writeInt (0x41545231); // "ATR1"
 }
 
 void HtmlToVstAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    ignoreUnused (data, sizeInBytes);
 }
 
 //==============================================================================
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new HtmlToVstAudioProcessor();
 }
