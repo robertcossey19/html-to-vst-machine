@@ -10,13 +10,11 @@ public:
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
+    // NOTE: These signatures must match the headless AudioProcessor API
 
-    // NOTE: These signatures must match juce_audio_processors_headless::AudioProcessor
-
-    // getName is non-const in this headless API
+    // getName is non-const in the headless JUCE API
     const juce::String getName() override;
 
-    // The following are const in headless AudioProcessor:
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
@@ -49,6 +47,10 @@ public:
     // VU meters exposed to the editor (in dB)
     std::atomic<float> currentVUL { 0.0f };
     std::atomic<float> currentVUR { 0.0f };
+
+    // Convenience getters the editor can call
+    float getCurrentVUL() const noexcept { return currentVUL.load(); }
+    float getCurrentVUR() const noexcept { return currentVUR.load(); }
 
 private:
     void updateDSP();
