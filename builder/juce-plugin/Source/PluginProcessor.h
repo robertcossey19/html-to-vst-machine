@@ -3,56 +3,74 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-#include "GeneratedParams.h"
-
+//==============================================================================
+//  HtmlToVstAudioProcessor
+//  Core DSP: 16x oversampled ATR-style chain with head bump, repro EQ,
+//  transformer non-linearity and stereo crosstalk.
+//
+//  NOTE: UI controls are not yet mapped – this uses a fixed default
+//  calibration matching the WebAudio defaults (15 ips, 250 nWb, 456, stereo).
 //==============================================================================
 
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
     HtmlToVstAudioProcessor();
-    ~HtmlToVstAudioProcessor() override = default;
+    ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
-    const juce::String getName() const override { return "HtmlToVstPlugin"; }
-
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;
 
+   #if ! JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+   #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    using juce::AudioProcessor::processBlock;
-
-    // MIDI capabilities (must override these so the class is not abstract)
-    bool acceptsMidi() const override      { return false; }
-    bool producesMidi() const override     { return false; }
-    bool isMidiEffect() const override     { return false; }
 
     //==============================================================================
-    bool hasEditor() const override        { return true; }
     juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override;
+
+    const juce::String getName() const override;
+
+    bool acceptsMidi() const override;
+    bool producesMidi() const override;
+    bool isMidiEffect() const override;
+    double getTailLengthSeconds() const override;
 
     //==============================================================================
-    double getTailLengthSeconds() const override { return 0.0; }
-
-    int getNumPrograms() override                { return 1; }
-    int getCurrentProgram() override             { return 0; }
-    void setCurrentProgram (int) override        {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
 
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // Access to the parameter state
-    juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-
 private:
-    juce::AudioProcessorValueTreeState apvts;
+    // Recalculate gains / EQ when sample rate or calibration changes.
+    void updateDSP();
 
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    // 16x oversampling: 48k -> 768k
+    juce::dsp::Oversampling<float> oversampling;
+
+    // Core tape chain at oversampled rate
+    juce::dsp::Gain<float>       inputGain;      // UI input + old -5 dB offset
+    juce::dsp::Gain<float>       fluxGain;       // reference level (fluxivity)
+    juce::dsp::Gain<float>       headroomGain;   // "headroom dB" pre-nonlinearity
+    juce::dsp::IIR::Filter<float> headBump;      // LF head bump
+    juce::dsp::IIR::Filter<float> reproHighShelf;// repro HF EQ
+    juce::dsp::WaveShaper<float> biasShaper;     // subtle asymmetry / bias
+    juce::dsp::WaveShaper<float> transformerShape;// output transformer curve
+    juce::dsp::IIR::Filter<float> lowpassOut;    // HF bandwidth limitation
+    juce::dsp::Gain<float>       outputGain;     // UI output + transformer makeup
+
+    double currentSampleRate = 44100.0;
+    float  xfTrimTarget      = 1.0f;             // transformer loudness trim
+    int    numChannels       = 2;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessor)
 };
