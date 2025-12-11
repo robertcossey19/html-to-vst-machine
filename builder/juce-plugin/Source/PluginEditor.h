@@ -1,15 +1,13 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 
-//==============================================================================
-class HtmlToVstAudioProcessorEditor
-    : public juce::AudioProcessorEditor,
-      private juce::Timer
+class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                       private juce::Timer
 {
 public:
-    HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
+    explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
     ~HtmlToVstAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
@@ -18,8 +16,8 @@ public:
 private:
     void timerCallback() override;
 
-    HtmlToVstAudioProcessor& processor;
-    juce::WebBrowserComponent webView { false }; // uses data: URL
+    HtmlToVstAudioProcessor& audioProcessor;
+    juce::WebBrowserComponent webView;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
