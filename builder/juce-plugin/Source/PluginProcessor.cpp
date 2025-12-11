@@ -14,7 +14,6 @@ HtmlToVstAudioProcessor::HtmlToVstAudioProcessor()
 #else
       AudioProcessor (BusesProperties()),
 #endif
-      // 16x oversampling = 4 stages of 2x
       oversampling (2, 4,
                     dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
                     true)
@@ -43,7 +42,6 @@ void HtmlToVstAudioProcessor::changeProgramName (int, const String&) {}
 #if ! JucePlugin_PreferredChannelConfigurations
 bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // We support only stereo <-> stereo
     if (layouts.getMainInputChannelSet()  != AudioChannelSet::stereo()
      || layouts.getMainOutputChannelSet() != AudioChannelSet::stereo())
         return false;
@@ -77,7 +75,6 @@ void HtmlToVstAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     lowpassOut.prepare      (spec);
     outputGain.prepare      (spec);
 
-    // Linear phase where possible
     headBump.reset();
     reproHighShelf.reset();
     lowpassOut.reset();
@@ -99,29 +96,19 @@ void HtmlToVstAudioProcessor::updateDSP()
     const auto osFactor = (double) oversampling.getOversamplingFactor();
     const auto osRate   = currentSampleRate * osFactor;
 
-    // ---- DEFAULT CALIBRATION TO MATCH WEB VERSION ----
-    //
-    // Speed: 15 ips
-    // Flux:  250 nWb/m
-    // Tape:  456
-    // Headroom: -12 dB
-    // Input UI = 0 dB, but original UI had -5 dB offset in record path
-    // Output UI = 0 dB
-    // Transformer: ON
-    //
+    // Calibration values matching the WebAudio model
     const float uiInputDb      = 0.0f;
     const float uiOutputDb     = 0.0f;
-    const float inputOffsetDb  = -5.0f;   // GUI 0 dB == -5 dB at record path
+    const float inputOffsetDb  = -5.0f;
     const float headroomDb     = -12.0f;
-    const float fluxDb         = 2.6f;    // 250 nWb/m ~= +2.6 dB over ref
-    const float biasDb         = 1.8f;    // over-bias calibration
+    const float fluxDb         = 2.6f;
+    const float biasDb         = 1.8f;
 
-    // Input + calibration
     const float inputDbEff = uiInputDb + inputOffsetDb;
     const float inGainLin  = Decibels::decibelsToGain (inputDbEff);
     const float fluxLin    = Decibels::decibelsToGain (fluxDb);
     const float headroomLin= Decibels::decibelsToGain (headroomDb);
-    const float outMakeupDb = 1.0f; // transformer & flux compensation
+    const float outMakeupDb = 1.0f;
     const float outDbEff   = uiOutputDb + outMakeupDb;
 
     inputGain.setGainLinear    (inGainLin);
@@ -129,12 +116,13 @@ void HtmlToVstAudioProcessor::updateDSP()
     headroomGain.setGainLinear (headroomLin);
     outputGain.setGainDecibels (outDbEff);
 
-    // --- Bias curves / asymmetry ---
-    biasShaper.function = [biasDb] (float x)
+    // ============================
+    // Bias Waveshaper (FIXED)
+    // ============================
+    biasShaper.functionToUse = [biasDb] (float x)
     {
-        // Slightly different curvature for positive vs negative to bias even/odd.
         const float baseK = 1.6f;
-        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f); // ±0.25
+        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f);
         const float kPos  = baseK;
         const float kNeg  = baseK / asym;
 
@@ -142,53 +130,47 @@ void HtmlToVstAudioProcessor::updateDSP()
                          : std::tanh (x * kNeg);
     };
 
-    // --- Tape EQ: head bump + repro shelf (NAB @ 15 ips, 456) ---
+    // Tape head bump
     {
+        using Coeff = dsp::IIR::Coefficients<float>;
         const float bumpFreq = 80.0f;
         const float bumpQ    = 1.1f;
-        const float bumpGain = 2.0f + 0.4f; // base + extra for 456
+        const float bumpGain = 2.0f + 0.4f;
 
-        using Coeff = dsp::IIR::Coefficients<float>;
-
-        headBump.coefficients = Coeff::makePeakFilter (osRate,
-                                                       bumpFreq,
-                                                       bumpQ,
-                                                       Decibels::decibelsToGain (bumpGain));
+        headBump.coefficients = Coeff::makePeakFilter (
+            osRate, bumpFreq, bumpQ,
+            Decibels::decibelsToGain (bumpGain)
+        );
     }
 
+    // Repro high-shelf tilt
     {
-        // Repro high shelf: NAB @ 15 ips, slightly negative tilt
+        using Coeff = dsp::IIR::Coefficients<float>;
         const float shelfFreq = 3180.0f;
         const float shelfQ    = 0.707f;
         const float shelfDb   = -0.75f;
 
-        using Coeff = dsp::IIR::Coefficients<float>;
-
-        reproHighShelf.coefficients = Coeff::makeHighShelf (osRate,
-                                                            shelfFreq,
-                                                            shelfQ,
-                                                            Decibels::decibelsToGain (shelfDb));
+        reproHighShelf.coefficients = Coeff::makeHighShelf (
+            osRate, shelfFreq, shelfQ,
+            Decibels::decibelsToGain (shelfDb)
+        );
     }
 
-    // --- Transformer output curve ---
-    transformerShape.function = [] (float x)
+    // ============================
+    // Transformer Waveshaper (FIXED)
+    // ============================
+    transformerShape.functionToUse = [] (float x)
     {
-        // Moderate 3rd/5th harmonic emphasis, kept under unity
         constexpr float k    = 3.0f;
         constexpr float gain = 0.98f;
         return std::tanh (x * k) * gain;
     };
 
-    // --- Output bandwidth limit ~ 22 kHz at 768 kHz OS ---
+    // Output lowpass ~ 22 kHz
     {
         using Coeff = dsp::IIR::Coefficients<float>;
-        const float lpFreq = 22000.0f;
-        lowpassOut.coefficients = Coeff::makeLowPass (osRate, lpFreq);
+        lowpassOut.coefficients = Coeff::makeLowPass (osRate, 22000.0f);
     }
-
-    // xfTrimTarget is left at 1.0 here – transformer loudness matching
-    // (the WebAudio implementation tweaked this dynamically; we can extend
-    // that in the future by analyzing RMS and nudging xfTrimTarget).
 }
 
 //==============================================================================
@@ -210,11 +192,11 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
 
     dsp::AudioBlock<float> block (buffer);
 
-    // --- 16x oversampling up ---
+    // 16× oversampling (4 × 2× stages)
     auto osBlock = oversampling.processSamplesUp (block);
     dsp::ProcessContextReplacing<float> context (osBlock);
 
-    // --- Core ATR-style chain at 768 kHz ---
+    // Full analog chain
     inputGain.process       (context);
     fluxGain.process        (context);
     headroomGain.process    (context);
@@ -225,41 +207,42 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
     lowpassOut.process      (context);
     outputGain.process      (context);
 
-    // --- Downsample back to project rate ---
     oversampling.processSamplesDown (block);
 
-    // --- Stereo crosstalk matrix (after downsampling) ---
-    auto* left  = buffer.getWritePointer (0);
-    auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
-
-    if (right != nullptr)
+    // Stereo Crosstalk
+    if (buffer.getNumChannels() > 1)
     {
-        const int n = buffer.getNumSamples();
-        const float ct   = Decibels::decibelsToGain (-40.0f);   // ~ -40 dB crosstalk
-        const float main = 1.0f - ct;                           // keep level ~ unity
+        const float ct   = Decibels::decibelsToGain (-40.0f);
+        const float main = 1.0f - ct;
+        const int n      = buffer.getNumSamples();
+
+        auto* left  = buffer.getWritePointer (0);
+        auto* right = buffer.getWritePointer (1);
 
         for (int i = 0; i < n; ++i)
         {
-            const float l = left[i];
-            const float r = right[i];
+            const float L = left[i];
+            const float R = right[i];
 
-            left[i]  = main * l + ct * r;
-            right[i] = main * r + ct * l;
+            left[i]  = main * L + ct * R;
+            right[i] = main * R + ct * L;
         }
     }
 }
 
 //==============================================================================
 
-bool HtmlToVstAudioProcessor::hasEditor() const                      { return true; }
-AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()        { return new HtmlToVstAudioProcessorEditor (*this); }
+bool HtmlToVstAudioProcessor::hasEditor() const { return true; }
+AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
+{
+    return new HtmlToVstAudioProcessorEditor (*this);
+}
 
 //==============================================================================
 
 void HtmlToVstAudioProcessor::getStateInformation (MemoryBlock& destData)
 {
-    // For now: no parameters, just placeholder blob.
-    MemoryOutputStream (destData, true).writeInt (0x41545231); // "ATR1"
+    MemoryOutputStream (destData, true).writeInt (0x41545231);
 }
 
 void HtmlToVstAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
