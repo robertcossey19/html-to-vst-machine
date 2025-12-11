@@ -1,35 +1,36 @@
 #include "PluginEditor.h"
-#include "PluginProcessor.h"
+#include "BinaryData.h"   // <-- gives us BinaryData::ampex_ui_html
 
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
     setSize (1100, 720);
 
-    addAndMakeVisible(webView);
-    webView.setBounds(getLocalBounds());
+    addAndMakeVisible (webView);
+    webView.setBounds (getLocalBounds());
 
-    // LOAD RAW HTML DIRECTLY FROM BINARYDATA — NOT URL ENCODED
-    juce::String html = juce::String::fromUTF8(
-        BinaryData::ampex_ui_html,
-        BinaryData::ampex_ui_htmlSize
-    );
+    // Load raw HTML from the embedded BinaryData (ampex_ui.html)
+    juce::String html (BinaryData::ampex_ui_html,
+                       BinaryData::ampex_ui_htmlSize);
 
-    // Convert <script> tags so JUCE runs them properly
-    html = html.replace("<script", "<script type='text/javascript'");
+    // Make sure script tags are treated as JavaScript
+    html = html.replace ("<script", "<script type='text/javascript'");
 
-    // LOAD DIRECTLY
-    webView.goToHTMLString(html);
+    // JUCE WebBrowserComponent doesn’t have goToHTMLString in this JUCE,
+    // so we use a data: URL instead.
+    juce::String dataUrl = "data:text/html," + juce::URL::addEscapeChars (html, true);
+
+    webView.goToURL (dataUrl);
 }
 
-HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor() {}
+HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor() = default;
 
 void HtmlToVstAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::black);
+    g.fillAll (juce::Colours::black);
 }
 
 void HtmlToVstAudioProcessorEditor::resized()
 {
-    webView.setBounds(getLocalBounds());
+    webView.setBounds (getLocalBounds());
 }
