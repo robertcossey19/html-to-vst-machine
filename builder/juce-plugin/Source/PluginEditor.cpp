@@ -1,63 +1,28 @@
 #include "PluginEditor.h"
-#include "BinaryData.h"
+#include "PluginProcessor.h"
+#include "BinaryData.h" // generated BinaryData (contains ampex_ui.html)
 
 using namespace juce;
-
-namespace
-{
-    // Naive percent-encoding to make the HTML safe to embed in a data: URL
-    String urlEncodeForDataURI (const String& s)
-    {
-        String encoded;
-        encoded.preallocateBytes (s.getNumBytesAsUTF8() * 3 + 32);
-
-        const char* raw = s.toRawUTF8();
-
-        for (auto* c = raw; *c != 0; ++c)
-        {
-            const unsigned char ch = (unsigned char) *c;
-
-            const bool needsEscape =
-                (ch <= 0x20) || (ch >= 0x7f) ||
-                ch == '%' || ch == '#' || ch == '?' ||
-                ch == '&' || ch == '+' || ch == '"';
-
-            if (! needsEscape)
-            {
-                encoded << (char) ch;
-            }
-            else
-            {
-                encoded << '%';
-                encoded << String::toHexString ((int) ch).paddedLeft ('0', 2);
-            }
-        }
-
-        return encoded;
-    }
-}
 
 //==============================================================================
 
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
     : AudioProcessorEditor (&p),
-      audioProcessor (p)
+      processor (p),
+      webView (false) // don't allow popups
 {
+    setOpaque (true);
+
+    // Web UI fills entire editor
     addAndMakeVisible (webView);
-    webView.setOpaque (true);
-    webView.setInterceptsMouseClicks (true, true);
 
-    // Load embedded HTML UI from BinaryData (ampex_ui.html)
-    String html = String::fromUTF8 (BinaryData::ampex_ui_html,
-                                    BinaryData::ampex_ui_htmlSize);
+    // Load the embedded HTML (ampex_ui.html with power/load/export removed)
+    loadEmbeddedHTML();
 
-    const String dataUrl = "data:text/html;charset=utf-8," + urlEncodeForDataURI (html);
-    webView.goToURL (dataUrl);
+    // Size: you can tweak this if you want a different default window
+    setSize (1024, 540);
 
-    // Match the web UI aspect reasonably
-    setSize (1000, 640);
-
-    // Drive VU meters ~30 Hz
+    // Poll the processor’s VU meters ~30 FPS
     startTimerHz (30);
 }
 
@@ -65,6 +30,8 @@ HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor()
 {
     stopTimer();
 }
+
+//==============================================================================
 
 void HtmlToVstAudioProcessorEditor::paint (Graphics& g)
 {
@@ -76,30 +43,61 @@ void HtmlToVstAudioProcessorEditor::resized()
     webView.setBounds (getLocalBounds());
 }
 
+//==============================================================================
+
+void HtmlToVstAudioProcessorEditor::loadEmbeddedHTML()
+{
+    // ampex_ui.html is embedded as BinaryData::ampex_ui_html
+    const String html = String::fromUTF8 (BinaryData::ampex_ui_html,
+                                          BinaryData::ampex_ui_htmlSize);
+
+    // Feed it to the WebBrowserComponent via a data: URL
+    const String dataUrl = "data:text/html;charset=utf-8," + URL::addEscapeChars (html, true);
+
+    webView.goToURL (dataUrl);
+}
+
+// Timer: push VU data into the HTML DOM via JS
 void HtmlToVstAudioProcessorEditor::timerCallback()
 {
-    // Processor exposes block RMS in dB (approx. -80..+12)
-    const float vuL = audioProcessor.getCurrentVUL();
-    const float vuR = audioProcessor.getCurrentVUR();
+    const float vuL = processor.getCurrentVUL();
+    const float vuR = processor.getCurrentVUR();
 
-    // Defensive clamp
-    const auto clampDb = [] (float db)
+    // Don’t spam JS if nothing really changed
+    const float deltaL = std::abs (vuL - lastSentVUL);
+    const float deltaR = std::abs (vuR - lastSentVUR);
+
+    if (deltaL < 0.5f && deltaR < 0.5f)
+        return;
+
+    lastSentVUL = vuL;
+    lastSentVUR = vuR;
+
+    sendVuToWebView (vuL, vuR);
+}
+
+void HtmlToVstAudioProcessorEditor::sendVuToWebView (float vuLeftDb, float vuRightDb)
+{
+    // Same angle mapping as the WebAudio version:
+    // angle = clamp( (dB + 50)*2.25 - 70, -70, +20 )
+    const auto toAngle = [] (float db)
     {
-        if (db < -80.0f) return -80.0f;
-        if (db >  12.0f) return  12.0f;
-        return db;
+        const float angle = (db + 50.0f) * 2.25f - 70.0f;
+        return jlimit (-70.0f, 20.0f, angle);
     };
 
-    const float clL = clampDb (vuL);
-    const float clR = clampDb (vuR);
+    const float angleL = toAngle (vuLeftDb);
+    const float angleR = toAngle (vuRightDb);
 
-    // This JS hook is implemented in ampex_ui.html
     String js;
-    js << "if (window.HtmlToVstPluginSetMeters) { "
-       << "window.HtmlToVstPluginSetMeters("
-       << String (clL, 4) << ", "
-       << String (clR, 4) << "); "
-       << "}";
+    js  << "(()=>{"
+        << "const nl=document.getElementById('vuL');"
+        << "const nr=document.getElementById('vuR');"
+        << "if(!nl||!nr)return;"
+        << "nl.style.transform='rotate(" << angleL << "deg)';"
+        << "nr.style.transform='rotate(" << angleR << "deg)';"
+        << "})();";
 
-    webView.evaluateJavascript (js, nullptr);
+    // JUCE 7: evaluateJavascript(script, callback = nullptr)
+    webView.evaluateJavascript (js);
 }
