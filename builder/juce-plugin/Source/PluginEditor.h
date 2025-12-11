@@ -1,21 +1,25 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 
-// This is the editor (GUI) for the plugin
+//==============================================================================
+// HTML to VST Plugin editor — hosts the ATR-102 UI HTML in a WebBrowserComponent
+//==============================================================================
 class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
-    HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
+    explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
     ~HtmlToVstAudioProcessorEditor() override;
 
-    void paint (juce::Graphics&) override;
+    void paint (juce::Graphics& g) override;
     void resized() override;
 
 private:
-    HtmlToVstAudioProcessor& audioProcessor;
-    juce::WebBrowserComponent webView;
+    HtmlToVstAudioProcessor& processor;
+
+    // false = keep the page loaded even if the editor is hidden
+    juce::WebBrowserComponent webView { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
