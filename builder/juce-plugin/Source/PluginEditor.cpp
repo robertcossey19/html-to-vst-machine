@@ -1,22 +1,23 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <juce_gui_extra/juce_gui_extra.h>
 
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
+    : AudioProcessorEditor (&p), processor (p)
 {
-    // --- Load embedded HTML from BinaryData ---
-    // NOTE: We will set the correct BinaryData::xxxx name in Step 1C.
-    juce::String html (BinaryData::html_to_vst_plugin_html, 
-                       BinaryData::html_to_vst_plugin_htmlSize);
+    setSize (900, 600);
 
-    webView.setOpaque (true);
-    webView.loadHTML (html);      // This prevents “URL cannot be shown”
-    addAndMakeVisible (webView);
+    auto html = juce::String::fromUTF8 (BinaryData::ampex_ui_html, 
+                                        BinaryData::ampex_ui_htmlSize);
 
-    setSize (900, 650);
+    webView.reset (new juce::WebBrowserComponent());
+    webView->goToURL ("data:text/html," + juce::URL::addEscapeChars (html, true));
+    addAndMakeVisible (*webView);
 }
 
-HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor() {}
+HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor()
+{
+}
 
 void HtmlToVstAudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -25,5 +26,6 @@ void HtmlToVstAudioProcessorEditor::paint (juce::Graphics& g)
 
 void HtmlToVstAudioProcessorEditor::resized()
 {
-    webView.setBounds (getLocalBounds());
+    if (webView.get() != nullptr)
+        webView->setBounds (getLocalBounds());
 }
