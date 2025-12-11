@@ -4,88 +4,82 @@
 #include <juce_dsp/juce_dsp.h>
 
 //==============================================================================
-// HtmlToVstAudioProcessor
-// Core ATR-102 style DSP chain with 16x oversampling.
-//==============================================================================
-
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
+    //==========================================================================
     HtmlToVstAudioProcessor();
     ~HtmlToVstAudioProcessor() override;
 
     //==========================================================================
+    // Required AudioProcessor overrides (JUCE headless / modular API)
+
     const juce::String getName() const override;
 
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+
+#if ! JucePlugin_PreferredChannelConfigurations
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+#endif
+
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    // MIDI / tail
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
 
-    //==========================================================================
-    int getNumPrograms() override;
+    // Programs (we just expose a single program)
+    int getNumPrograms() override;                    // must be > 0
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
 
-    //==========================================================================
-#if ! JucePlugin_PreferredChannelConfigurations
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-#endif
-
-    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
-
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    using juce::AudioProcessor::processBlock;
-
-    //==========================================================================
+    // Editor
     bool hasEditor() const override;
     juce::AudioProcessorEditor* createEditor() override;
 
-    //==========================================================================
+    // State
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==========================================================================
-    // VU meter access for the editor
-    float getCurrentVUL() const noexcept { return currentVUL; }
-    float getCurrentVUR() const noexcept { return currentVUR; }
+    // VU meter access for PluginEditor
+    float getCurrentVUL() const noexcept { return currentVUL.load(); }
+    float getCurrentVUR() const noexcept { return currentVUR.load(); }
 
 private:
-    // Internal helper to set up EQ, gains, waveshapers, etc.
+    //==========================================================================
     void updateDSP();
 
-    //==========================================================================
-    double currentSampleRate = 0.0;
-    int    numChannels       = 0;
+    // Core audio config
+    double currentSampleRate = 44100.0;
+    int    numChannels       = 2;
 
-    // 16x oversampling = 2^4
+    // 16x oversampling (2^4)
     juce::dsp::Oversampling<float> oversampling;
 
-    // Gain structure
+    // Gain stages
     juce::dsp::Gain<float> inputGain;
     juce::dsp::Gain<float> fluxGain;
     juce::dsp::Gain<float> headroomGain;
     juce::dsp::Gain<float> outputGain;
 
-    // Non-linear and EQ stages
-    juce::dsp::WaveShaper<float> biasShaper;
+    // EQ / filters
     juce::dsp::IIR::Filter<float> headBump;
     juce::dsp::IIR::Filter<float> reproHighShelf;
-    juce::dsp::WaveShaper<float> transformerShape;
     juce::dsp::IIR::Filter<float> lowpassOut;
 
-    // Meter state (smoothed RMS in dBFS)
-    float currentVUL = -70.0f;
-    float currentVUR = -70.0f;
+    // Simple non-linear bias & transformer are applied sample-wise in processBlock
+    float biasDb        = 1.8f;   // default over-bias calibration
+    float transformerOn = 1.0f;   // 1 = on, 0 = off (UI later)
+
+    // VU meters (atomics so editor can poll safely)
+    std::atomic<float> currentVUL { 0.0f };
+    std::atomic<float> currentVUR { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessor)
 };
-
-//==============================================================================
-// Factory
-//==============================================================================
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
