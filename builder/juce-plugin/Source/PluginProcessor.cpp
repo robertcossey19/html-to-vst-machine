@@ -6,18 +6,12 @@
 //==============================================================================
 
 HtmlToVstAudioProcessor::HtmlToVstAudioProcessor()
-   : juce::AudioProcessor (
-#if ! JucePlugin_PreferredChannelConfigurations
-       BusesProperties()
-           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-#else
-       BusesProperties()
-#endif
-     ),
-     oversampling (2, 4,
-                   juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
-                   true)
+    : juce::AudioProcessor (juce::AudioProcessor::BusesProperties()
+                                .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                                .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      oversampling (2, 4,
+                    juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
+                    true)
 {
 }
 
@@ -44,7 +38,7 @@ void HtmlToVstAudioProcessor::changeProgramName (int, const juce::String&) {}
 //==============================================================================
 
 #if ! JucePlugin_PreferredChannelConfigurations
-bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool HtmlToVstAudioProcessor::isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const
 {
     // stereo in / stereo out only
     if (layouts.getMainInputChannelSet()  != juce::AudioChannelSet::stereo()
