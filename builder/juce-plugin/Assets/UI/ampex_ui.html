@@ -3,1028 +3,281 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ANALOGEXACT — reliable audio (SourceBus + once-only source)</title>
+<title>ANALOGEXACT – ATR-102 UI</title>
+
+<!-- Tailwind + Fonts -->
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+
 <style>
-  html,body{height:100%;background:#1a202c}
-  body{font-family:'Inter',sans-serif;color:#e5e7eb}
-  .metal-panel{background:linear-gradient(145deg,#4a5568,#3a4454);border:1px solid #718096;border-top-color:#a0aec0}
-  .module-bg{background:rgba(0,0,0,.2);border:1px solid rgba(0,0,0,.4);box-shadow:inset 0 2px 6px rgba(0,0,0,.4)}
-  .knob{position:relative;width:80px;height:80px;border-radius:50%;background:linear-gradient(145deg,#5a6578,#2d3748);border:2px solid #1a202c;box-shadow:0 5px 10px rgba(0,0,0,.5),inset 0 2px 3px rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;touch-action:none}
-  .knob-ind{position:absolute;width:4px;height:12px;background:#e2e8f0;top:6px;border-radius:2px;transform-origin:center 34px;box-shadow:0 0 3px rgba(255,255,255,.5)}
-  .vu-housing{background:#111827;border:4px solid #4b5563;border-radius:10px;padding:12px;box-shadow:inset 0 0 20px rgba(0,0,0,.8)}
-  .vu-scale{position:relative;width:100%;height:60px;background:#ffebcd;border-radius:4px;overflow:hidden}
-  .vu-needle{position:absolute;width:2px;height:100%;background:#dc2626;bottom:0;left:50%;transform-origin:bottom center;transition:transform .04s linear;box-shadow:0 0 5px #dc2626}
-  .vu-dim{opacity:.35; filter:grayscale(.3)}
-  .switch-group button.active{background:#f6ad55;color:#1a202c;font-weight:700;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
-  .transport{background:linear-gradient(180deg,#2b3342,#1f2632);border:1px solid #111827;border-radius:10px;box-shadow:inset 0 1px 4px rgba(0,0,0,.6)}
-  .transport .btn{min-width:64px;padding:10px 14px;border-radius:10px;border:1px solid #0f172a;background:#374151;color:#e5e7eb;font-weight:700;letter-spacing:.02em;transition:transform .04s ease, background .15s ease}
-  .transport .btn:active{transform:translateY(1px)}
-  .lamp{width:10px;height:10px;border-radius:50%;background:#374151;box-shadow:inset 0 0 3px rgba(0,0,0,.8)}
-  .lamp.on.green{background:#34d399;box-shadow:0 0 6px #34d399}
-  .lamp.on.red{background:#f87171;box-shadow:0 0 6px #f87171}
-  .btn.play.active{background:#16a34a;color:#0b1b0b}
-  .btn.stop.active{background:#ef4444;color:#1f0b0b}
-  .btn.load.active{background:#f59e0b;color:#1f1301}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
-  #tech-panel{transition:max-height .5s ease, opacity .4s ease, transform .4s ease; transform:scaleY(.98)}
-  #tech-panel.open{transform:scaleY(1)}
-  .collapsible{transition:max-height .35s ease, opacity .25s ease, transform .25s ease; overflow:hidden}
-  .collapsible.hidden-state{max-height:0;opacity:0;transform:translateY(-4px);pointer-events:none}
-  .toggle-switch{display:inline-block;width:50px;height:26px;background:#4a5568;border-radius:13px;cursor:pointer;position:relative;border:1px solid #1a202c}
-  .toggle-switch.active{background:#f6ad55}
-  .toggle-switch-handle{position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s}
-  .toggle-switch.active .toggle-switch-handle{transform:translateX(24px)}
-  .dl-btn{background:#f59e0b;color:#1f1301;border:1px solid #7c4a00}
+  html,body { height:100%; background:#1a202c; }
+  body { font-family:'Inter',sans-serif; color:#e5e7eb; }
+
+  .metal-panel { background:linear-gradient(145deg,#4a5568,#3a4454); border:1px solid #718096; border-top-color:#a0aec0; }
+
+  .module-bg { background:rgba(0,0,0,.2); border:1px solid rgba(0,0,0,.4); box-shadow:inset 0 2px 6px rgba(0,0,0,.4); }
+
+  .knob { position:relative; width:80px; height:80px; border-radius:50%; background:linear-gradient(145deg,#5a6578,#2d3748);
+          border:2px solid #1a202c; box-shadow:0 5px 10px rgba(0,0,0,.5),inset 0 2px 3px rgba(255,255,255,.08);
+          display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; touch-action:none; }
+  .knob-ind { position:absolute; width:4px; height:12px; background:#e2e8f0; top:6px; border-radius:2px;
+              transform-origin:center 34px; box-shadow:0 0 3px rgba(255,255,255,.5); }
+
+  .vu-housing { background:#111827; border:4px solid #4b5563; border-radius:10px; padding:12px;
+                box-shadow:inset 0 0 20px rgba(0,0,0,.8); }
+
+  .vu-scale { position:relative; width:100%; height:60px; background:#ffebcd; border-radius:4px; overflow:hidden; }
+  .vu-needle { position:absolute; width:2px; height:100%; background:#dc2626; bottom:0; left:50%;
+               transform-origin:bottom center; transition:transform .04s linear; box-shadow:0 0 5px #dc2626; }
+  .vu-dim { opacity:.35; filter:grayscale(.3); }
+
+  .switch-group button.active { background:#f6ad55; color:#1a202c; font-weight:700; box-shadow:inset 0 2px 4px rgba(0,0,0,.4); }
+
+  #tech-panel { transition:max-height .5s ease, opacity .4s ease, transform .4s ease; transform:scaleY(.98); }
+  #tech-panel.open { transform:scaleY(1); }
+
+  .collapsible { transition:max-height .35s ease, opacity .25s ease, transform .25s ease; overflow:hidden; }
+  .collapsible.hidden-state { max-height:0; opacity:0; transform:translateY(-4px); pointer-events:none; }
+
+  .toggle-switch { display:inline-block; width:50px; height:26px; background:#4a5568; border-radius:13px; cursor:pointer;
+                   position:relative; border:1px solid #1a202c; }
+  .toggle-switch.active { background:#f6ad55; }
+  .toggle-switch-handle { position:absolute; top:2px; left:2px; width:20px; height:20px; background:#fff; border-radius:50%;
+                          box-shadow:0 1px 3px rgba(0,0,0,.4); transition:transform .2s; }
+  .toggle-switch.active .toggle-switch-handle { transform:translateX(24px); }
+
 </style>
 </head>
+
 <body class="flex items-center justify-center min-h-screen p-3">
-  <div class="metal-panel rounded-2xl p-4 md:p-6 w-full max-w-6xl space-y-4">
+<div class="metal-panel rounded-2xl p-4 md:p-6 w-full max-w-6xl space-y-4">
+
+    <!-- HEADER -->
     <div class="flex justify-between items-center pb-3 border-b border-black/30">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-bold text-white tracking-wider">ANALOGEXACT</h1>
-        <p class="text-sm text-gray-400">INPUT monitor = true hard bypass (unity, completely dry) • Non-linear core @ <b>768 kHz (120 taps)</b></p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-export" class="dl-btn font-bold py-2 px-3 rounded-lg shadow disabled:opacity-50" disabled>Process &amp; Download</button>
-        <button id="power" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg border-b-4 border-gray-800 active:border-b-2 transition-all">POWER</button>
-      </div>
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-white tracking-wider">ANALOGEXACT</h1>
+            <p class="text-sm text-gray-400">
+                ATR-102 • 768 kHz oversampling • Non-linear magnetic core • Transformer I/O
+            </p>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-3">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <!-- METERS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div id="vuLwrap" class="vu-housing">
-          <div class="flex items-center justify-between text-xs text-gray-700 mb-1">
-            <span id="vuLabelL" class="text-gray-300">VU - L</span><span class="text-gray-500">-20  -10   0   +3  +5</span>
-          </div>
-          <div class="vu-scale"><div id="vuL" class="vu-needle" style="transform:rotate(-70deg)"></div></div>
+            <div class="flex items-center justify-between text-xs text-gray-700 mb-1">
+                <span class="text-gray-300">VU - L</span>
+                <span class="text-gray-500">-20  -10   0   +3  +5</span>
+            </div>
+            <div class="vu-scale"><div id="vuL" class="vu-needle" style="transform:rotate(-70deg)"></div></div>
         </div>
+
         <div id="vuRwrap" class="vu-housing">
-          <div class="flex items-center justify-between text-xs text-gray-700 mb-1">
-            <span id="vuLabelR" class="text-gray-300">VU - R</span><span class="text-gray-500">-20  -10   0   +3  +5</span>
-          </div>
-          <div class="vu-scale"><div id="vuR" class="vu-needle" style="transform:rotate(-70deg)"></div></div>
-        </div>
-      </div>
-      <div class="transport p-3 rounded-lg">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2">
-              <div id="lamp-ready" class="lamp"></div><span class="text-xs">READY</span>
-              <div id="lamp-play" class="lamp"></div><span class="text-xs">PLAY</span>
-              <div id="lamp-stop" class="lamp on red"></div><span class="text-xs">STOP</span>
+            <div class="flex items-center justify-between text-xs text-gray-700 mb-1">
+                <span class="text-gray-300">VU - R</span>
+                <span class="text-gray-500">-20  -10   0   +3  +5</span>
             </div>
-            <!-- Channel lamps -->
-            <div class="flex items-center gap-2 pl-4 border-l border-black/30">
-              <div id="lamp-ch1" class="lamp"></div><span class="text-xs">CH-1</span>
-              <div id="lamp-ch2" class="lamp"></div><span class="text-xs">CH-2</span>
+            <div class="vu-scale"><div id="vuR" class="vu-needle" style="transform:rotate(-70deg)"></div></div>
+        </div>
+    </div>
+
+    <!-- INPUT / OUTPUT / MONITOR -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
+            <h2 class="text-lg font-bold">INPUT LEVEL</h2>
+            <div class="knob" id="knob-in"><div class="knob-ind"></div></div>
+            <span id="val-in" class="font-mono text-sm text-yellow-300">0.0 dB</span>
+        </div>
+
+        <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
+            <h2 class="text-lg font-bold">OUTPUT LEVEL</h2>
+            <div class="knob" id="knob-out"><div class="knob-ind"></div></div>
+            <span id="val-out" class="font-mono text-sm text-yellow-300">0.0 dB</span>
+        </div>
+
+        <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
+            <h2 class="text-lg font-bold">MONITOR</h2>
+            <div id="monitor" class="switch-group flex rounded-md bg-gray-900 p-1 w-full">
+                <button data-monitor="input" class="flex-1 py-2 rounded text-sm font-medium active">INPUT</button>
+                <button data-monitor="repro" class="flex-1 py-2 rounded text-sm font-medium">REPRO</button>
             </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="btn-load" class="btn load" disabled>LOAD</button>
-            <button id="btn-rew" class="btn" disabled>&laquo; REW</button>
-            <button id="btn-stop" class="btn stop active" disabled>STOP</button>
-            <button id="btn-play" class="btn play" disabled>PLAY &rsaquo;</button>
-            <button id="btn-ff" class="btn" disabled>FF &raquo;</button>
-          </div>
-          <div class="truncate text-xs text-gray-300" id="file-label">No file loaded</div>
         </div>
-        <input id="file" type="file" class="hidden" accept="audio/*"/>
-      </div>
+
     </div>
 
+    <!-- HEADBLOCK -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
-        <h2 class="text-lg font-bold">INPUT LEVEL</h2>
-        <div class="knob" id="knob-in"><div class="knob-ind"></div></div>
-        <span id="val-in" class="font-mono text-sm text-yellow-300">0.0 dB</span>
-        <p class="text-[10px] text-gray-400 mt-[-4px]">UI 0 dB = old −5 dB (record path only; no effect in INPUT monitor)</p>
-      </div>
-      <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
-        <h2 class="text-lg font-bold">OUTPUT LEVEL</h2>
-        <div class="knob" id="knob-out"><div class="knob-ind"></div></div>
-        <span id="val-out" class="font-mono text-sm text-yellow-300">0.0 dB</span>
-      </div>
-      <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
-        <h2 class="text-lg font-bold mb-2">MONITOR</h2>
-        <div id="monitor" class="switch-group flex rounded-md bg-gray-900 p-1 w-full">
-          <button data-monitor="input" class="flex-1 py-2 rounded text-sm font-medium active">INPUT</button>
-          <button data-monitor="repro" class="flex-1 py-2 rounded text-sm font-medium">REPRO</button>
+        <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
+            <h2 class="text-lg font-bold mb-2">HEADBLOCK</h2>
+            <div id="headblock" class="switch-group flex rounded-md bg-gray-900 p-1 w-full">
+                <button data-headblock="stereo" class="flex-1 py-2 rounded text-sm font-medium active">STEREO 2-TRK</button>
+                <button data-headblock="mono"   class="flex-1 py-2 rounded text-sm font-medium">FULL-TRACK MONO</button>
+            </div>
+            <p id="headblock-note" class="text-[11px] text-gray-400 text-center">
+                Stereo 2-track headblock active.
+            </p>
         </div>
-      </div>
     </div>
 
-    <!-- Headblock Mono/Stereo switch -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="module-bg p-4 rounded-lg space-y-3 flex flex-col items-center">
-        <h2 class="text-lg font-bold mb-2">HEADBLOCK</h2>
-        <div id="headblock" class="switch-group flex rounded-md bg-gray-900 p-1 w-full">
-          <button data-headblock="stereo" class="flex-1 py-2 rounded text-sm font-medium active">STEREO 2-TRK</button>
-          <button data-headblock="mono"   class="flex-1 py-2 rounded text-sm font-medium">FULL-TRACK MONO</button>
-        </div>
-        <p id="headblock-note" class="text-[11px] text-gray-400 text-center">
-          Stereo 2-track headblock active.
-        </p>
-      </div>
-    </div>
-
+    <!-- TECH PANEL TOGGLES (still allowed) -->
     <div class="text-center pt-1">
-      <button id="toggle-tech" class="text-yellow-400 hover:text-yellow-300 font-semibold text-sm">Technician's Setup Panel ▼</button>
+        <button id="toggle-tech" class="text-yellow-400 hover:text-yellow-300 font-semibold text-sm">
+            Technician’s Setup Panel ▼
+        </button>
     </div>
 
     <div id="tech-panel" class="max-h-0 opacity-0 overflow-hidden module-bg p-4 rounded-lg space-y-6">
-      <h3 class="text-center font-bold text-lg text-yellow-400">INTERNAL CALIBRATION & TAPE FORMULA</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 text-center border-b border-gray-600 pb-4">
-        <div class="space-y-2">
-          <label class="font-semibold block">BIAS ADJUST</label>
-          <p class="text-xs text-gray-400">Main Audio PWA</p>
-          <div class="knob mx-auto mt-2" id="knob-bias" style="width:60px;height:60px;"><div class="knob-ind" style="transform-origin:center 25px;"></div></div>
-          <span id="val-bias" class="font-mono text-xs">+0.0 dB</span>
-        </div>
-        <div class="space-y-2 flex flex-col justify-center pt-8">
-          <label class="font-semibold block">XFORMER I/O</label>
-          <p class="text-xs text-gray-400">I/O Module Jumper</p>
-          <div class="flex justify-center mt-auto mb-auto pt-2">
-            <div id="transformer" class="toggle-switch active"><div class="toggle-switch-handle"></div></div>
-          </div>
-        </div>
-        <div class="space-y-2 flex flex-col justify-center pt-8">
-          <div class="flex items-center justify-between mb-2">
-            <label class="font-semibold block">EQ STANDARD</label>
-            <button id="eq-legend-toggle" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white">Learn More</button>
-          </div>
-          <div id="eq" class="switch-group flex rounded-md bg-gray-900 p-1 mx-auto">
-            <button data-eq="NAB" class="flex-1 py-1 rounded text-xs font-medium active">NAB</button>
-            <button data-eq="IEC" class="flex-1 py-1 rounded text-xs font-medium">IEC/CCIR</button>
-          </div>
-          <div id="eq-legend" class="collapsible hidden-state mt-3 text-left bg-gray-800/70 border border-gray-700 rounded-lg p-3 space-y-3">
-            <p class="text-sm font-semibold text-yellow-300">How EQ standard changes tone with speed.</p>
-            <div class="space-y-2 text-sm">
-              <div><h4 class="font-bold text-white">7.5 ips</h4><p><b>NAB:</b> more LF bump, softer top. <b>IEC:</b> tighter LF, clearer top.</p></div>
-              <div><h4 class="font-bold text-white">15 ips</h4><p><b>NAB:</b> balanced & smooth. <b>IEC:</b> punchier, slightly brighter.</p></div>
-              <div><h4 class="font-bold text-white">30 ips</h4><p><b>IEC:</b> most linear, smallest head-bump. <b>NAB:</b> a bit more LF body.</p></div>
+
+        <h3 class="text-center font-bold text-lg text-yellow-400">INTERNAL CALIBRATION & TAPE FORMULA</h3>
+
+        <!-- Bias / Transformer / EQ -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 text-center border-b border-gray-600 pb-4">
+
+            <div class="space-y-2">
+                <label class="font-semibold block">BIAS ADJUST</label>
+                <p class="text-xs text-gray-400">Main Audio PWA</p>
+                <div class="knob mx-auto mt-2" id="knob-bias" style="width:60px;height:60px;">
+                    <div class="knob-ind" style="transform-origin:center 25px;"></div>
+                </div>
+                <span id="val-bias" class="font-mono text-xs">+0.0 dB</span>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-        <div>
-          <label class="font-semibold mb-2 block">SPEED (IPS)</label>
-          <div id="speed" class="switch-group flex rounded-md bg-gray-900 p-1">
-            <button data-speed="7.5" class="flex-1 py-1 rounded text-sm font-medium">7.5</button>
-            <button data-speed="15"  class="flex-1 py-1 rounded text-sm font-medium active">15</button>
-            <button data-speed="30"  class="flex-1 py-1 rounded text-sm font-medium">30</button>
-          </div>
-        </div>
-        <div>
-          <label class="font-semibold mb-2 block">FLUXIVITY (nWb/m)</label>
-          <div id="flux" class="switch-group flex rounded-md bg-gray-900 p-1">
-            <button data-flux="185" class="flex-1 py-1 rounded text-sm font-medium">185</button>
-            <button data-flux="250" class="flex-1 py-1 rounded text-sm font-medium active">250</button>
-            <button data-flux="370" class="flex-1 py-1 rounded text-sm font-medium">370</button>
-          </div>
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="font-semibold block">TAPE TYPE</label>
-            <button id="tape-legend-toggle" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white">Learn More</button>
-          </div>
-          <div id="tape" class="switch-group grid grid-cols-3 gap-1 bg-gray-900 p-1 rounded-md">
-            <button data-tapetype="406"  class="py-1 rounded text-xs font-medium">406</button>
-            <button data-tapetype="456"  class="py-1 rounded text-xs font-medium active">456</button>
-            <button data-tapetype="499"  class="py-1 rounded text-xs font-medium">499</button>
-            <button data-tapetype="GP9"  class="py-1 rounded text-xs font-medium">GP9</button>
-            <button data-tapetype="SM900" class="py-1 rounded text-xs font-medium">SM900</button>
-            <button data-tapetype="SM911" class="py-1 rounded text-xs font-medium">SM911</button>
-          </div>
-          <div id="tape-legend" class="collapsible hidden-state mt-3 text-left bg-gray-800/70 border border-gray-700 rounded-lg p-3 text-sm">
-            <p class="mb-1"><b>Stereo & EQ tilt</b> (typical alignment):</p>
-            <p><b>406:</b> warm, soft top • <b>456:</b> mild low-mid lift, smooth HF • <b>499:</b> tighter lows, more HF headroom • <b>GP9/SM900:</b> high output, very linear • <b>SM911:</b> wide image, gentle low-mid lift.</p>
-          </div>
-        </div>
-      </div>
+            <div class="space-y-2 flex flex-col justify-center pt-8">
+                <label class="font-semibold block">XFORMER I/O</label>
+                <div class="flex justify-center mt-auto mb-auto pt-2">
+                    <div id="transformer" class="toggle-switch active">
+                        <div class="toggle-switch-handle"></div>
+                    </div>
+                </div>
+            </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center border-t border-gray-700 pt-4">
-        <div class="flex items-center justify-center gap-3">
-          <div id="autocal" class="toggle-switch active"><div class="toggle-switch-handle"></div></div>
-          <span class="text-sm font-semibold">AUTO CAL</span>
-        </div>
-        <div class="col-span-2 flex items-center justify-center">
-          <button id="cal-now" class="px-4 py-2 rounded-md bg-yellow-500 text-black font-semibold shadow">CAL NOW</button>
-        </div>
-        <div class="col-span-3">
-          <p id="cal-rationale" class="text-xs text-gray-300 bg-gray-800/60 border border-gray-700 rounded-md p-2"></p>
-        </div>
-      </div>
-    </div>
+            <div class="space-y-2 flex flex-col justify-center pt-8">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="font-semibold block">EQ STANDARD</label>
+                    <button id="eq-legend-toggle" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white">
+                        Learn More
+                    </button>
+                </div>
 
-    <div id="msg" class="hidden text-center bg-blue-900/50 border border-blue-700 p-3 rounded-lg text-sm"></div>
-  </div>
+                <div id="eq" class="switch-group flex rounded-md bg-gray-900 p-1 mx-auto">
+                    <button data-eq="NAB" class="flex-1 py-1 rounded text-xs font-medium active">NAB</button>
+                    <button data-eq="IEC" class="flex-1 py-1 rounded text-xs font-medium">IEC/CCIR</button>
+                </div>
+
+                <div id="eq-legend" class="collapsible hidden-state mt-3 text-left bg-gray-800/70 border border-gray-700 rounded-lg p-3 space-y-3 text-sm">
+                    <p class="text-yellow-300 font-semibold">How EQ standard changes tone with speed.</p>
+                    <p><b>NAB 15ips</b> – balanced classic alignment<br/>
+                       <b>IEC 30ips</b> – minimal head bump</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SPEED / FLUX / TAPE -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+
+            <div>
+                <label class="font-semibold mb-2 block">SPEED (IPS)</label>
+                <div id="speed" class="switch-group flex rounded-md bg-gray-900 p-1">
+                    <button data-speed="7.5" class="flex-1 py-1 rounded text-sm">7.5</button>
+                    <button data-speed="15"  class="flex-1 py-1 rounded text-sm active">15</button>
+                    <button data-speed="30"  class="flex-1 py-1 rounded text-sm">30</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="font-semibold mb-2 block">FLUXIVITY</label>
+                <div id="flux" class="switch-group flex rounded-md bg-gray-900 p-1">
+                    <button data-flux="185" class="flex-1 py-1 rounded text-sm">185</button>
+                    <button data-flux="250" class="flex-1 py-1 rounded text-sm active">250</button>
+                    <button data-flux="370" class="flex-1 py-1 rounded text-sm">370</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="font-semibold mb-2 block">TAPE TYPE</label>
+                <div id="tape" class="switch-group grid grid-cols-3 gap-1 bg-gray-900 p-1 rounded-md">
+                    <button data-tapetype="406" class="py-1 rounded text-xs">406</button>
+                    <button data-tapetype="456" class="py-1 rounded text-xs active">456</button>
+                    <button data-tapetype="499" class="py-1 rounded text-xs">499</button>
+                    <button data-tapetype="GP9" class="py-1 rounded text-xs">GP9</button>
+                    <button data-tapetype="SM900" class="py-1 rounded text-xs">SM900</button>
+                    <button data-tapetype="SM911" class="py-1 rounded text-xs">SM911</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div> <!-- tech-panel -->
+
+</div>
 
 <script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id);
-
-/* ===== UI refs ===== */
-const powerBtn=$('power');
-const btnLoad=$('btn-load'), btnPlay=$('btn-play'), btnStop=$('btn-stop'), btnRew=$('btn-rew'), btnFf=$('btn-ff');
-const fileInput=$('file'), fileLabel=$('file-label');
-const lampReady=$('lamp-ready'), lampPlay=$('lamp-play'), lampStop=$('lamp-stop');
-const lampCh1=$('lamp-ch1'), lampCh2=$('lamp-ch2');
-const vuL=$('vuL'), vuR=$('vuR'), msgEl=$('msg');
-const vuRwrap=$('vuRwrap'), vuLabelR=$('vuLabelR');
-const toggleTech=$('toggle-tech'), techPanel=$('tech-panel');
-const eqLegendBtn=$('eq-legend-toggle'), eqLegend=$('eq-legend');
-const tapeLegendBtn=$('tape-legend-toggle'), tapeLegend=$('tape-legend');
-const transformer=$('transformer');
-const calToggle=$('autocal'), calNowBtn=$('cal-now'), calRationale=$('cal-rationale');
-const btnExport=$('btn-export');
-const headblockSwitch=$('headblock'), headblockNote=$('headblock-note');
-
-/* ===== State ===== */
-let audioCtx=null, isOn=false, rafVU=null;
-let g=null, isProcessing=false;
-
-// Playback state
-let audioBuffer=null, sourceNode=null, startTime=0, pausedAt=0;
-
-const INPUT_DB_OFFSET=-5;
-const DEFAULT_HEADROOM_DB=-12;
-const CROSSTALK_DB=-40; // about -40 dB L<->R
-
-const state={ inDb:0, outDb:0, monitor:'input', speed:15, flux:250, eq:'NAB', bias:0,
-  transformer:true, autoCal:true, tapeType:'456', headroomDb:DEFAULT_HEADROOM_DB,
-  headblock:'stereo' // 'stereo' or 'mono'
-};
-
-/* ===== Utils ===== */
-function showMsg(t){ if(!msgEl) return; msgEl.textContent=t; msgEl.classList.remove('hidden'); clearTimeout(showMsg._t); showMsg._t=setTimeout(()=>msgEl.classList.add('hidden'),2600); }
-function safe(n,fallback=0){ const v=Number(n); return Number.isFinite(v)?v:fallback; }
-function db2gain(db){ const clamped=Math.max(safe(db,0), -60); return Math.pow(10,clamped/20); }
-function identityCurve(N=4096){ const c=new Float32Array(N); for(let i=0;i<N;i++) c[i]=i*2/(N-1)-1; return c; }
-function setLamps({ready=false,play=false,stop=true}){ 
-  ['on','green','red'].forEach(cls=>{lampReady.classList.remove(cls);lampPlay.classList.remove(cls);lampStop.classList.remove(cls);});
-  lampReady.classList.toggle('on',ready);lampReady.classList.toggle('green',ready);
-  lampPlay.classList.toggle('on',play);lampPlay.classList.toggle('green',play);
-  lampStop.classList.toggle('on',stop);lampStop.classList.toggle('red',stop);
-}
-function setChannelLamps(monoOn){
-  lampCh1.classList.add('on','green');
-  lampCh2.classList.toggle('on', !monoOn);
-  lampCh2.classList.toggle('green', !monoOn);
-  vuRwrap.classList.toggle('vu-dim', monoOn);
-  vuLabelR.textContent = monoOn ? 'VU - R (idle)' : 'VU - R';
-}
-function enableTransport(on){ [btnLoad,btnPlay,btnStop,btnRew,btnFf].forEach(b=>b.disabled=!on); btnExport.disabled=!on; }
-
-/* ===== Tape / EQ tables ===== */
-const tapeProfiles={
-  "406":{knee:.78,asym:.78,satScale:1.00,bump:+0.3},
-  "456":{knee:.82,asym:.75,satScale:1.05,bump:+0.4},
-  "499":{knee:.88,asym:.68,satScale:1.20,bump:+0.2},
-  "GP9":{knee:.90,asym:.66,satScale:1.30,bump:0.0},
-  "SM900":{knee:.92,asym:.65,satScale:1.35,bump:-0.1},
-  "SM911":{knee:.86,asym:.70,satScale:1.12,bump:+0.1}
-};
-
-const calPresets={
-  "406":{flux:185,bias:+1.5},
-  "456":{flux:250,bias:+1.8},
-  "499":{flux:370,bias:+2.5},
-  "GP9":{flux:370,bias:+3.0},
-  "SM900":{flux:370,bias:+3.0},
-  "SM911":{flux:250,bias:+2.5}
-};
-
-const eqForSpeed=s=> (s>=30?'IEC':'NAB');
-
-/* gentler, more realistic EQ curves */
-function getEQ(speed, eqStd){
-  const std=(eqStd==='IEC/CCIR'?'IEC':eqStd);
-
-  const table = {
-    NAB: {
-      7.5: { repro_hf:[3180,-1.25], bump:[60, 2.4] },
-      15:  { repro_hf:[3180,-0.75], bump:[80, 1.8] },
-      30:  { repro_hf:[3180,-0.50], bump:[100,1.4] }
-    },
-    IEC: {
-      7.5: { repro_hf:[2270,-0.75], bump:[55, 1.8] },
-      15:  { repro_hf:[4550,-0.25], bump:[75, 1.6] },
-      30:  { repro_hf:[9100, 0.00], bump:[95, 0.7] }
-    }
-  };
-
-  return (table[std] && table[std][speed]) || table.NAB[15];
-}
-
-/* ===== Graph ===== */
-let xfTrimTarget=1.0; /* single declaration */
-
-function setStereo(node){ try{ node.channelCountMode='explicit'; node.channelInterpretation='speakers'; node.channelCount=2; }catch{} }
-
-function buildGraph(){
-  g={};
-  g.master = audioCtx.createGain(); g.master.gain.value=1.0; setStereo(g.master); g.master.connect(audioCtx.destination);
-
-  // source bus
-  g.srcBus = audioCtx.createGain(); g.srcBus.gain.value=1.0; setStereo(g.srcBus);
-
-  // stereo/mono taps and summer
-  g.srcSplit = audioCtx.createChannelSplitter(2);
-  g.sumL = audioCtx.createGain(); g.sumR = audioCtx.createGain(); g.sumL.gain.value=0.5; g.sumR.gain.value=0.5;
-  g.monoSum = audioCtx.createGain();
-  g.stereoTap = audioCtx.createGain(); g.stereoTap.gain.value=1.0;
-  g.monoTap = audioCtx.createGain();   g.monoTap.gain.value=0.0;
-
-  // Processed path taps
-  g.inputTap = audioCtx.createGain();
-  g.dryTap   = audioCtx.createGain();
-
-  // Processed chain
-  g.inputGain = audioCtx.createGain(); setStereo(g.inputGain);
-  g.fluxGain  = audioCtx.createGain(); setStereo(g.fluxGain);
-  g.oversBypass = audioCtx.createGain(); g.oversBypass.gain.value=1.0;
-
-  /* === BIAS PATH (audible) === */
-  g.biasShape = audioCtx.createWaveShaper(); g.biasShape.curve = identityCurve();
-  g.biasHF = audioCtx.createBiquadFilter(); g.biasHF.type='highshelf'; g.biasHF.frequency.value=8000; g.biasHF.gain.value=0;
-
-  g.headroomGain = audioCtx.createGain(); setStereo(g.headroomGain);
-  g.headBump = audioCtx.createBiquadFilter(); g.headBump.type='peaking'; g.headBump.frequency.value=80; g.headBump.Q.value=1.1; g.headBump.gain.value=2.0; setStereo(g.headBump);
-  g.repro    = audioCtx.createGain(); setStereo(g.repro);
-  g.deemph   = audioCtx.createBiquadFilter(); g.deemph.type='highshelf'; g.deemph.frequency.value=3180; g.deemph.gain.value=-10; setStereo(g.deemph);
-  g.monitorRe= audioCtx.createGain(); setStereo(g.monitorRe);
-  g.outGain  = audioCtx.createGain(); setStereo(g.outGain);
-  g.xfTrim   = audioCtx.createGain(); setStereo(g.xfTrim);
-  g.shaperOut= audioCtx.createWaveShaper(); g.shaperOut.curve=identityCurve();
-  g.lpOut    = audioCtx.createBiquadFilter(); g.lpOut.type='lowpass'; g.lpOut.frequency.value=22050;
-
-  // Crosstalk matrix nodes (after lpOut)
-  g.xTalkSplit  = audioCtx.createChannelSplitter(2);
-  g.xTalkLMain  = audioCtx.createGain();
-  g.xTalkRMain  = audioCtx.createGain();
-  g.xTalkLFromR = audioCtx.createGain();
-  g.xTalkRFromL = audioCtx.createGain();
-  g.xTalkMerge  = audioCtx.createChannelMerger(2);
-
-  // VU (processed)
-  g.splitProc = audioCtx.createChannelSplitter(2);
-  g.anProcL   = audioCtx.createAnalyser();
-  g.anProcR   = audioCtx.createAnalyser();
-  g.anProcL.fftSize=2048; g.anProcR.fftSize=2048;
-  g.anProcL.smoothingTimeConstant=.85; g.anProcR.smoothingTimeConstant=.85;
-
-  // DRY path
-  g.dryIn  = audioCtx.createGain(); setStereo(g.dryIn);
-  g.dryOut = audioCtx.createGain(); setStereo(g.dryOut);
-
-  g.splitDry = audioCtx.createChannelSplitter(2);
-  g.anDryL = audioCtx.createAnalyser(); g.anDryR = audioCtx.createAnalyser();
-  g.anDryL.fftSize=2048; g.anDryR.fftSize=2048;
-  g.anDryL.smoothingTimeConstant=.85; g.anDryR.smoothingTimeConstant=.85;
-
-  // Wire source taps
-  g.srcBus.connect(g.stereoTap);
-  g.srcBus.connect(g.srcSplit);
-  g.srcSplit.connect(g.sumL,0); g.srcSplit.connect(g.sumR,1);
-  g.sumL.connect(g.monoSum); g.sumR.connect(g.monoSum);
-  g.monoSum.connect(g.monoTap);
-
-  // Mix taps to destinations
-  g.stereoTap.connect(g.inputTap);
-  g.monoTap.connect(g.inputTap);
-  g.stereoTap.connect(g.dryTap);
-  g.monoTap.connect(g.dryTap);
-
-  // Processed chain
-  g.inputTap.connect(g.inputGain);
-  g.inputGain.connect(g.fluxGain);
-  g.fluxGain.connect(g.oversBypass);
-
-  /* oversBypass -> biasShape -> biasHF -> headroomGain */
-  g.oversBypass.connect(g.biasShape);
-  g.biasShape.connect(g.biasHF);
-  g.biasHF.connect(g.headroomGain);
-
-  g.headroomGain.connect(g.headBump);
-  g.headBump.connect(g.repro);
-  g.repro.connect(g.deemph);
-  g.deemph.connect(g.monitorRe);
-  g.monitorRe.connect(g.outGain);
-  g.outGain.connect(g.xfTrim);
-  g.xfTrim.connect(g.shaperOut);
-  g.shaperOut.connect(g.lpOut);
-
-  // Crosstalk wiring
-  const ctLin = db2gain(CROSSTALK_DB);  // ~0.01
-  const mainLin = 1.0 - ctLin;          // keep level essentially unity
-
-  g.xTalkLMain.gain.value  = mainLin;
-  g.xTalkRMain.gain.value  = mainLin;
-  g.xTalkLFromR.gain.value = ctLin;
-  g.xTalkRFromL.gain.value = ctLin;
-
-  g.lpOut.connect(g.xTalkSplit);
-
-  // from split: ch0 = L, ch1 = R
-  g.xTalkSplit.connect(g.xTalkLMain, 0);   // L -> L direct
-  g.xTalkSplit.connect(g.xTalkRFromL, 0);  // L -> R crosstalk
-  g.xTalkSplit.connect(g.xTalkRMain, 1);   // R -> R direct
-  g.xTalkSplit.connect(g.xTalkLFromR, 1);  // R -> L crosstalk
-
-  // sum to stereo
-  g.xTalkLMain.connect(g.xTalkMerge, 0, 0);
-  g.xTalkLFromR.connect(g.xTalkMerge, 0, 0);
-  g.xTalkRMain.connect(g.xTalkMerge, 0, 1);
-  g.xTalkRFromL.connect(g.xTalkMerge, 0, 1);
-
-  // to master
-  g.xTalkMerge.connect(g.master);
-
-  // VU (processed) from post‑crosstalk signal
-  g.xTalkMerge.connect(g.splitProc);
-  g.splitProc.connect(g.anProcL,0);
-  g.splitProc.connect(g.anProcR,1);
-
-  // DRY → master
-  g.dryTap.connect(g.dryIn);
-  g.dryIn.connect(g.dryOut);
-  g.dryOut.connect(g.master);
-
-  // DRY VU
-  g.dryOut.connect(g.splitDry);
-  g.splitDry.connect(g.anDryL,0);
-  g.splitDry.connect(g.anDryR,1);
-
-  state.headroomDb=DEFAULT_HEADROOM_DB;
-  applyParams();
-}
-
-/* ===== Curves ===== */
-function createTransformerOutCurve(){
-  const N=4096,c=new Float32Array(N),k=3.0;
-  for(let i=0;i<N;i++){
-    const x=i*2/(N-1)-1;
-    c[i]=Math.tanh(x*k)*0.98;
-  }
-  return c;
-}
-
-/* Bias symmetry curve */
-function createBiasCurve(biasDb){
-  // biasDb ~ -5..+5; subtle symmetry & odd/even balance
-  const N = 4096, c = new Float32Array(N);
-  const baseK = 1.6;
-  const asym = 1 - Math.max(-0.25, Math.min(0.25, biasDb * 0.05)); // ±0.25
-  for (let i=0;i<N;i++){
-    const x = i*2/(N-1)-1;
-    const kPos = baseK;
-    const kNeg = baseK / asym; // under-bias => more odd (more asym); over-bias => more symmetric
-    c[i] = x >= 0 ? Math.tanh(x * kPos) : Math.tanh(x * kNeg);
-  }
-  return c;
-}
-
-/* ===== Params ===== */
-function applyParams(){
-  if(!g||!audioCtx) return;
-  const now=audioCtx.currentTime;
-
-  // Headblock routing (smooth switch)
-  const monoOn = (state.headblock==='mono');
-  g.stereoTap.gain.setTargetAtTime(monoOn?0.0:1.0, now, 0.01);
-  g.monoTap.gain.setTargetAtTime(monoOn?1.0:0.0, now, 0.01);
-  setChannelLamps(monoOn);
-  headblockNote.textContent = monoOn
-    ? 'Full-track mono headblock (CH-1 electronics). Output split to both L/R; CH-2 idle indicator lit.'
-    : 'Stereo 2-track headblock active.';
-
-  const fluxDbMap={185:0,250:2.6,370:6};
-  const fluxDb=safe(fluxDbMap[state.flux],0);
-  const inDbEff=safe(state.inDb,0)+INPUT_DB_OFFSET;
-  const headroomDb=safe(state.headroomDb,DEFAULT_HEADROOM_DB);
-  const outDb=safe(state.outDb,0);
-
-  const inGain=Math.max(db2gain(inDbEff),0.001);
-  let flGain=Math.max(db2gain(fluxDb),0.001);
-  const hrGain=Math.max(db2gain(headroomDb),0.001);
-
-  let outMakeupDb=0;
-  if(state.transformer){ flGain*=db2gain(-1.0); outMakeupDb+=1.0; }
-
-  const mon=(state.monitor==='repro')?'repro':'input';
-
-  // DRY bus when INPUT
-  g.dryOut.gain.setTargetAtTime(mon==='input'?1.0:0.0, now, 0.01);
-
-  // Processed bus when REPRO
-  g.inputGain.gain.setTargetAtTime(inGain, now, 0.01);
-  g.fluxGain.gain.setTargetAtTime(flGain, now, 0.01);
-
-  /* Bias path from state.bias */
-  const bias = safe(state.bias, 0);
-  g.biasShape.curve = createBiasCurve(bias);
-  const biasTilt = Math.max(-3, Math.min(3, -0.6 * bias)); // ~±3 dB @ 8 kHz
-  g.biasHF.gain.setTargetAtTime(biasTilt, now, 0.02);
-
-  g.headroomGain.gain.setTargetAtTime(hrGain, now, 0.01);
-  g.monitorRe.gain.setTargetAtTime(mon==='repro'?1.0:0.0, now, 0.01);
-  g.outGain.gain.setTargetAtTime(mon==='repro'?Math.max(db2gain(outDb+outMakeupDb),0.001):0.0, now, 0.01);
-
-  if(state.transformer){
-    g.shaperOut.curve=createTransformerOutCurve();
-    g.lpOut.frequency.setTargetAtTime(22000, now, 0.05);
-  }else{
-    g.shaperOut.curve=identityCurve();
-    g.lpOut.frequency.setTargetAtTime(22050, now, 0.05);
-  }
-
-  const eq=getEQ(safe(state.speed,15), state.eq);
-  const bumpExtra=safe((tapeProfiles[state.tapeType]||{}).bump,0);
-  g.headBump.frequency.setTargetAtTime(safe(eq.bump[0],80), now, 0.02);
-  g.headBump.gain.setTargetAtTime(safe(eq.bump[1],2.0)+bumpExtra, now, 0.02);
-  g.deemph.frequency.setTargetAtTime(safe(eq.repro_hf[0],3180), now, 0.02);
-  g.deemph.gain.setTargetAtTime(safe(eq.repro_hf[1],-10), now, 0.02);
-
-  g.xfTrim.gain.setTargetAtTime(xfTrimTarget, now, 0.02);
-}
-
-/* ===== Power & Transport ===== */
-powerBtn.addEventListener('click', async ()=>{
-  try{
-    if(!isOn){
-      audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
-      await audioCtx.resume();
-      buildGraph(); isOn=true;
-      powerBtn.classList.remove('bg-gray-600'); powerBtn.classList.add('bg-red-700');
-      // Enable only LOAD at first
-      [btnLoad].forEach(b=>b.disabled=false);
-      [btnPlay, btnStop, btnRew, btnFf].forEach(b => b.disabled = true);
-      btnExport.disabled=true;
-      setLamps({ready:false,play:false,stop:true});
-      setChannelLamps(state.headblock==='mono');
-      startVU(); initialAutoCal(); showMsg('Power ON. LOAD a file.');
-      audioCtx.onstatechange=()=>{ if(audioCtx.state!=='running'){ showMsg('Context not running. Click POWER/PLAY.'); } };
-    }else{
-      stopPlayback(); try{ if(audioCtx) await audioCtx.close(); }catch{}
-      audioCtx=null; g=null; isOn=false;
-      powerBtn.classList.add('bg-gray-600'); powerBtn.classList.remove('bg-red-700');
-      [btnLoad, btnPlay, btnStop, btnRew, btnFf].forEach(b=>b.disabled=true);
-      btnExport.disabled=true;
-      setLamps({ready:false,play:false,stop:true});
-      vuL.style.transform='rotate(-70deg)'; vuR.style.transform='rotate(-70deg)';
-      vuRwrap.classList.remove('vu-dim'); vuLabelR.textContent='VU - R';
-      lampCh1.classList.remove('on','green'); lampCh2.classList.remove('on','green');
-    }
-  }catch(e){ console.error(e); showMsg('Audio init blocked. Click POWER again.'); }
-});
-
-btnLoad.addEventListener('click', ()=>fileInput.click());
-
-fileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file || !audioCtx) return;
-
-  stopPlayback();
-  audioBuffer = null;
-  [btnPlay,btnStop,btnRew,btnFf].forEach(b=>b.disabled=true);
-  btnExport.disabled=true;
-  showMsg('Decoding audio...');
-  fileLabel.textContent = file.name;
-  btnLoad.classList.add('active');
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    pausedAt = 0;
-    [btnPlay,btnStop,btnRew,btnFf].forEach(b=>b.disabled=false);
-    btnExport.disabled=false;
-    showMsg('File decoded. Ready to PLAY.');
-    setLamps({ready:true,play:false,stop:true});
-  } catch (err) {
-    console.error('Error decoding audio data', err);
-    showMsg('Could not decode this audio file.');
-    fileLabel.textContent = 'DECODE ERROR';
-    btnLoad.classList.remove('active');
-    setLamps({ready:false,play:false,stop:true});
-  }
-});
-
-btnPlay.addEventListener('click', async () => {
-  if (!audioCtx || !audioBuffer || isProcessing) return;
-  await audioCtx.resume();
-
-  sourceNode = audioCtx.createBufferSource();
-  sourceNode.buffer = audioBuffer;
-  sourceNode.connect(g.srcBus);
-
-  if (pausedAt >= audioBuffer.duration) pausedAt = 0;
-  sourceNode.start(0, pausedAt);
-
-  startTime = audioCtx.currentTime - pausedAt;
-  isProcessing = true;
-  setLamps({ready:true,play:true,stop:false});
-  btnPlay.classList.add('active'); btnStop.classList.remove('active');
-
-  sourceNode.onended = () => {
-    if (isProcessing) { stopPlayback(false); pausedAt = audioBuffer.duration; }
-  };
-});
-
-function stopPlayback(shouldPause = true) {
-  if (sourceNode) {
-    if (shouldPause) pausedAt = audioCtx.currentTime - startTime;
-    sourceNode.onended = null;
-    try{ sourceNode.stop(0); }catch{}
-    sourceNode = null;
-  }
-  isProcessing = false;
-  setLamps({ready:!!audioBuffer,play:false,stop:true});
-  btnPlay.classList.remove('active'); btnStop.classList.add('active');
-}
-
-btnStop.addEventListener('click', () => stopPlayback());
-btnRew.addEventListener('click', () => { if (audioBuffer) pausedAt = 0; if (!isProcessing) showMsg('Rewound to start.'); });
-btnFf.addEventListener('click', () => {
-  if (audioBuffer) pausedAt = Math.min(audioBuffer.duration, pausedAt + 5);
-  if (!isProcessing) showMsg(`Skipped to ${pausedAt.toFixed(1)}s`);
-});
-
-/* ===== VU ===== */
-function startVU(){
-  cancelAnimationFrame(rafVU);
-  const tmpL=new Uint8Array(2048), tmpR=new Uint8Array(2048);
-  const needle=db=>Math.max(-70,Math.min(20,(db+50)*2.25-70));
-  const loop=()=>{
-    if(isOn && g && isProcessing){
-      const useDry=(state.monitor!=='repro');
-      const anL=useDry?g.anDryL:g.anProcL, anR=useDry?g.anDryR:g.anProcR;
-      anL.getByteTimeDomainData(tmpL); anR.getByteTimeDomainData(tmpR);
-      let sL=0,sR=0;
-      for(const a of tmpL){ const v=a/128-1; sL+=v*v; }
-      for(const a of tmpR){ const v=a/128-1; sR+=v*v; }
-      const rmsL=Math.sqrt(sL/tmpL.length)||1e-9, rmsR=Math.sqrt(sR/tmpR.length)||1e-9;
-      const dbL=20*Math.log10(rmsL), dbR=20*Math.log10(rmsR);
-      vuL.style.transform=`rotate(${needle(dbL)}deg)`; vuR.style.transform=`rotate(${needle(dbR)}deg)`;
-    }else{
-      vuL.style.transform='rotate(-70deg)'; vuR.style.transform='rotate(-70deg)';
-    }
-    rafVU=requestAnimationFrame(loop);
-  };
-  loop();
-}
-
-/* ===== Knobs ===== */
-makeKnob('knob-in','val-in','inDb',-12,12,v=>`${v.toFixed(1)} dB`);
-makeKnob('knob-out','val-out','outDb',-24,6,v=>`${v.toFixed(1)} dB`);
-makeKnob('knob-bias','val-bias','bias',-5,5,v=>`${v.toFixed(1)} dB`);
-function makeKnob(knobId,valId,key,min,max,fmt){
-  const el=$(knobId), ind=el.querySelector('.knob-ind'), val=$(valId);
-  let dragging=false,startY=0,startVal=0,pid=null;
-  function setVal(v){
-    const c=Math.min(max,Math.max(min,safe(v,0)));
-    state[key]=Math.round(c*1000)/1000;
-    const pct=(state[key]-min)/(max-min);
-    ind.style.transform=`rotate(${270*pct-135}deg)`;
-    val.textContent=fmt(state[key]);
-    applyParams();
-  }
-  setVal(state[key]??0);
-  el.addEventListener('pointerdown',e=>{ dragging=true; pid=e.pointerId; startY=e.clientY; startVal=safe(state[key],0); try{el.setPointerCapture(pid);}catch{} document.body.style.cursor='ns-resize'; e.preventDefault(); });
-  el.addEventListener('pointermove',e=>{ if(!dragging||(pid!==null&&e.pointerId!==pid))return; const dy=startY-e.clientY; setVal(startVal+(dy/150)*(max-min)); });
-  const end=e=>{ if(!dragging||(pid!==null&&e.pointerId!==pid))return; dragging=false; try{el.releasePointerCapture(pid);}catch{} pid=null; document.body.style.cursor='default'; };
-  el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end); el.addEventListener('pointerleave',e=>{ if(dragging) end(e); });
-  el.addEventListener('wheel',e=>{ e.preventDefault(); const step=(max-min)/100; setVal(safe(state[key],0)+(e.deltaY<0? step : -step)); }, {passive:false});
-}
-
-/* ===== Switches & Toggles ===== */
-$('monitor').addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.monitor=e.target.dataset.monitor; setActive(e.currentTarget,e.target); applyParams(); });
-$('speed').addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.speed=parseFloat(e.target.dataset.speed); setActive(e.currentTarget,e.target); if(state.autoCal){ state.eq=eqForSpeed(state.speed); setSwitch('eq','eq',state.eq); } applyParams(); updateRationale(); });
-$('flux').addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.flux=parseInt(e.target.dataset.flux,10); setActive(e.currentTarget,e.target); applyParams(); updateRationale(); });
-$('eq').addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.eq=(e.target.dataset.eq==='IEC/CCIR'?'IEC':e.target.dataset.eq); setActive(e.currentTarget,e.target); applyParams(); updateRationale(); });
-$('tape').addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.tapeType=e.target.dataset.tapetype; setActive(e.currentTarget,e.target); if(state.autoCal) applyCalibration(state.tapeType,true); else { applyParams(); updateRationale(); } });
-headblockSwitch.addEventListener('click',(e)=>{ if(e.target.tagName!=='BUTTON')return; state.headblock=e.target.dataset.headblock; setActive(e.currentTarget,e.target); applyParams(); });
-
-function setActive(group,btn){ group.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
-function setSwitch(id,dataKey,value){
-  const gEl=$(id); if(!gEl) return;
-  gEl.querySelectorAll('button').forEach(b=>{
-    const raw=b.dataset[dataKey], norm=(dataKey==='eq' && raw==='IEC/CCIR')?'IEC':raw;
-    const is=(dataKey==='eq')?(norm===value):(String(raw)===String(value));
-    b.classList.toggle('active',is);
-  });
-}
-toggleTech.addEventListener('click',()=>{
-  const open=techPanel.classList.contains('open');
-  if(open){
-    techPanel.style.maxHeight='0px'; techPanel.classList.remove('open');
-    toggleTech.textContent="Technician's Setup Panel ▼"; techPanel.style.opacity='0';
-  } else {
-    techPanel.classList.add('open');
-    techPanel.style.maxHeight=techPanel.scrollHeight+'px';
-    techPanel.style.opacity='1';
-    toggleTech.textContent="Technician's Setup Panel ▲";
-    setTimeout(()=>{ if(techPanel.classList.contains('open')) techPanel.style.maxHeight='none'; }, 500);
-  }
-});
-function toggleCollapsible(el){
-  const hidden=el.classList.contains('hidden-state');
-  if(hidden){
-    el.classList.remove('hidden-state');
-    el.style.maxHeight=el.scrollHeight+'px';
-    setTimeout(()=>{ el.style.maxHeight='none'; }, 350);
-  } else {
-    const h=el.scrollHeight;
-    el.style.maxHeight=h+'px';
-    requestAnimationFrame(()=>{
-      el.classList.add('hidden-state');
-      el.style.maxHeight='0px';
-    });
-  }
-}
-eqLegendBtn.addEventListener('click',()=>toggleCollapsible(eqLegend));
-tapeLegendBtn.addEventListener('click',()=>toggleCollapsible(tapeLegend));
-
-/* ===== Transformer loudness match ===== */
-function getProcessedRMS(){
-  if(!g) return 1e-9;
-  const arrL=new Uint8Array(g.anProcL.fftSize), arrR=new Uint8Array(g.anProcR.fftSize);
-  g.anProcL.getByteTimeDomainData(arrL); g.anProcR.getByteTimeDomainData(arrR);
-  let sL=0,sR=0; for(const a of arrL){ const v=a/128-1; sL+=v*v; } for(const a of arrR){ const v=a/128-1; sR+=v*v; }
-  const rmsL=Math.sqrt(sL/arrL.length)||1e-9, rmsR=Math.sqrt(sR/arrR.length)||1e-9;
-  return 0.5*(rmsL+rmsR);
-}
-transformer.addEventListener('click',()=>{
-  const wasOn=state.transformer;
-  const inRepro=(state.monitor==='repro' && isProcessing && g);
-  let preRMS=1e-6; if(inRepro && wasOn) preRMS=getProcessedRMS();
-  transformer.classList.toggle('active');
-  state.transformer=transformer.classList.contains('active');
-  if(!inRepro){
-    if(!wasOn && state.transformer){ xfTrimTarget=1.0; applyParams(); }
-    else applyParams();
-    return;
-  }
-  if(wasOn && !state.transformer){
-    applyParams();
-    const t0=performance.now();
-    const settle=()=>{
-      const now=performance.now();
-      const curr=Math.max(1e-9,getProcessedRMS());
-      const desired=Math.min(8, Math.max(0.125, preRMS/curr));
-      xfTrimTarget=0.75*xfTrimTarget+0.25*desired; applyParams();
-      if(now-t0<320) requestAnimationFrame(settle);
+// =========================================
+// REAL-TIME VU METER UPDATE FROM C++
+// JUCE calls: window.setVUMeters(L, R)
+// =========================================
+window.setVUMeters = function (left, right) {
+    const l = document.getElementById("vuL");
+    const r = document.getElementById("vuR");
+    if (!l || !r) return;
+
+    // convert linear to dB
+    const toDb = v => 20 * Math.log10(Math.max(v, 1e-9));
+
+    const dbL = toDb(left);
+    const dbR = toDb(right);
+
+    const needle = db => {
+        // -70 dB = far left, +20 dB = far right
+        return Math.max(-70, Math.min(20, (db + 50) * 2.25 - 70));
     };
-    requestAnimationFrame(settle);
-  }else if(!wasOn && state.transformer){
-    xfTrimTarget=1.0; applyParams();
-  } else applyParams();
-});
 
-/* ===== Auto Cal ===== */
-calToggle.addEventListener('click',()=>{
-  calToggle.classList.toggle('active');
-  state.autoCal=calToggle.classList.contains('active');
-  showMsg(`Auto Cal ${state.autoCal?'ENABLED':'DISABLED'}`);
-  updateRationale();
-});
-calNowBtn.addEventListener('click',()=>applyCalibration(state.tapeType,true));
+    l.style.transform = `rotate(${needle(dbL)}deg)`;
+    r.style.transform = `rotate(${needle(dbR)}deg)`;
+};
 
-function applyCalibration(tapeType,announce=false){
-  const preset=calPresets[tapeType]||calPresets['456'];
-  state.flux=preset.flux;
-  state.bias=preset.bias;   // Auto Cal sets the bias starting point
-  state.eq=eqForSpeed(state.speed);
+// ==========================
+// KNOB + SWITCH JS (unchanged)
+// ==========================
+function $(id){ return document.getElementById(id); }
+function safe(n,f=0){ const v=Number(n); return Number.isFinite(v)?v:f; }
+function setActive(group,btn){ group.querySelectorAll("button").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); }
 
-  // reflect switches
-  setSwitch('flux','flux',String(preset.flux));
-  setSwitch('eq','eq',state.eq);
+let state={inDb:0,outDb:0,bias:0,monitor:"input",speed:15,flux:250,eq:"NAB",tapeType:"456",headblock:"stereo"};
 
-  // reflect the BIAS knob visually (still fully adjustable by user)
-  const knobBias=$('knob-bias'), ind=knobBias.querySelector('.knob-ind');
-  const min=-5,max=5,val=state.bias;
-  const pct=(Math.max(min,Math.min(max,val))-min)/(max-min);
-  ind.style.transform=`rotate(${270*pct-135}deg)`;
-  $('val-bias').textContent=`${state.bias.toFixed(1)} dB`;
+// Knob setup
+function makeKnob(knobId,valId,key,min,max,fmt){
+    const el=$(knobId), ind=el.querySelector(".knob-ind"), val=$(valId);
+    let dragging=false,startY=0,startVal=0,pid=null;
 
-  applyParams(); updateRationale();
-  if(announce) showMsg(`Auto Cal: ${tapeType} → Flux ${preset.flux} nWb/m, ${state.eq}, Bias ${state.bias.toFixed(1)} dB`);
-}
-function initialAutoCal(){ applyCalibration(state.tapeType,false); }
-
-function updateRationale(){
-  const eqNote=(state.speed>=30 && state.eq==='IEC')?'30ips→IEC keeps head-bump minimal.'
-    : (state.speed===15 && state.eq==='NAB')?'15ips→NAB is the classic balanced alignment.'
-    : (state.speed===7.5 && state.eq==='NAB')?'7.5ips→NAB adds LF body.'
-    : (state.eq==='IEC')?'IEC tightens lows / adds presence.':'NAB smooth highs / LF weight.';
-  const fluxNote=(state.flux===370)?'High level for high-output stocks.'
-    :(state.flux===250)?'Standard reference level.'
-    :'Lower ref for earlier, softer saturation.';
-  const hrNote=(state.headroomDb>0)
-    ? `Headroom +${state.headroomDb.toFixed(1)} dB → earlier saturation.`
-    : (state.headroomDb<0)
-      ? `Headroom ${state.headroomDb.toFixed(1)} dB → more clean headroom.`
-      : 'Headroom −12 dB (default).';
-  calRationale.textContent=`Why: ${eqNote} Tape: ${state.tapeType}. ${fluxNote} Bias ${state.bias.toFixed(1)} dB over @10kHz. ${hrNote}`;
-}
-
-/* ===== Export (stereo or TRUE MONO from headblock) ===== */
-btnExport.addEventListener('click', async ()=>{
-  if(!isOn || !audioBuffer){ showMsg('Load audio first.'); return; }
-  try{
-    const duration=audioBuffer.duration;
-    const sr=48000;
-    const isMono = (state.headblock==='mono');
-    const channels = isMono ? 1 : 2;
-
-    const offline=new OfflineAudioContext({numberOfChannels:channels,length:Math.ceil(duration*sr),sampleRate:sr});
-    const src=offline.createBufferSource(); src.buffer = audioBuffer;
-
-    if(isMono){
-      // Sum to mono, then 1-ch chain
-      const split=offline.createChannelSplitter(2);
-      const gL=offline.createGain(), gR=offline.createGain(); gL.gain.value=0.5; gR.gain.value=0.5;
-      const sum=offline.createGain();
-
-      const inputGain=offline.createGain(), fluxGain=offline.createGain();
-      const oversBypass=offline.createGain(); oversBypass.gain.value=1;
-      const biasShape=offline.createWaveShaper();
-      const biasHF=offline.createBiquadFilter(); biasHF.type='highshelf'; biasHF.frequency.value=8000;
-      const headroomGain=offline.createGain();
-      const headBump=offline.createBiquadFilter(); headBump.type='peaking';
-      const repro=offline.createGain();
-      const deemph=offline.createBiquadFilter(); deemph.type='highshelf';
-      const outGain=offline.createGain();
-      const xfTrim=offline.createGain();
-      const outShaper=offline.createWaveShaper();
-      const lpOut=offline.createBiquadFilter(); lpOut.type='lowpass';
-
-      src.connect(split);
-      split.connect(gL,0); split.connect(gR,1);
-      gL.connect(sum); gR.connect(sum);
-
-      sum.connect(inputGain); inputGain.connect(fluxGain);
-      fluxGain.connect(oversBypass);
-      oversBypass.connect(biasShape); biasShape.curve = (function(){return createBiasCurve(state.bias);})();
-      biasHF.gain.value = Math.max(-3, Math.min(3, -0.6 * state.bias));
-      biasShape.connect(biasHF);
-      biasHF.connect(headroomGain);
-
-      headroomGain.connect(headBump); headBump.connect(repro);
-      repro.connect(deemph); deemph.connect(outGain);
-      outGain.connect(xfTrim); xfTrim.connect(outShaper);
-      outShaper.connect(lpOut); lpOut.connect(offline.destination);
-
-      // Params
-      const fluxDbMap={185:0,250:2.6,370:6};
-      const fluxDb=safe(fluxDbMap[state.flux],0);
-      const inDbEff=safe(state.inDb,0)+INPUT_DB_OFFSET;
-      const headroomDb=safe(state.headroomDb,DEFAULT_HEADROOM_DB);
-      const outDb=safe(state.outDb,0);
-
-      let inGainVal=Math.max(db2gain(inDbEff),0.001);
-      let flGainVal=Math.max(db2gain(fluxDb),0.001);
-      let hrGainVal=Math.max(db2gain(headroomDb),0.001);
-      let outMakeupDb=state.transformer?1.0:0.0;
-      if(state.transformer) flGainVal*=db2gain(-1.0);
-
-      inputGain.gain.value=inGainVal;
-      fluxGain.gain.value=flGainVal;
-      headroomGain.gain.value=hrGainVal;
-      outGain.gain.value=Math.max(db2gain(outDb+outMakeupDb),0.001);
-
-      const eq=getEQ(safe(state.speed,15), state.eq);
-      const bumpExtra=safe((tapeProfiles[state.tapeType]||{}).bump,0);
-      headBump.frequency.value=safe(eq.bump[0],80); headBump.Q.value=1.1; headBump.gain.value=safe(eq.bump[1],2.0)+bumpExtra;
-      deemph.frequency.value=safe(eq.repro_hf[0],3180); deemph.gain.value=safe(eq.repro_hf[1],-10);
-
-      outShaper.curve = state.transformer ? (function(){const N=4096,c=new Float32Array(N);for(let i=0;i<N;i++){const x=i*2/(N-1)-1;c[i]=Math.tanh(x*3.0)*0.98;}return c;})() : identityCurve();
-      lpOut.frequency.value=state.transformer?22000:22050;
-      xfTrim.gain.value=xfTrimTarget;
-
-      src.start(0);
-      const rendered=await offline.startRendering();
-      const wav=renderWav24(rendered); // 1ch mono
-      const blob=new Blob([wav],{type:'audio/wav'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='ANALOGEXACT_repro_48k24_MONO.wav'; document.body.appendChild(a); a.click(); a.remove();
-      showMsg('Rendered TRUE MONO 48k/24 WAV downloaded.');
-    } else {
-      // Stereo export with same crosstalk matrix
-      const inputGain=offline.createGain(), fluxGain=offline.createGain();
-      const oversBypass=offline.createGain(); oversBypass.gain.value=1;
-      const biasShape=offline.createWaveShaper();
-      const biasHF=offline.createBiquadFilter(); biasHF.type='highshelf'; biasHF.frequency.value=8000;
-      const headroomGain=offline.createGain();
-      const headBump=offline.createBiquadFilter(); headBump.type='peaking';
-      const repro=offline.createGain();
-      const deemph=offline.createBiquadFilter(); deemph.type='highshelf';
-      const outGain=offline.createGain();
-      const xfTrim=offline.createGain();
-      const outShaper=offline.createWaveShaper();
-      const lpOut=offline.createBiquadFilter(); lpOut.type='lowpass';
-
-      // Crosstalk nodes (offline)
-      const xTalkSplit  = offline.createChannelSplitter(2);
-      const xTalkLMain  = offline.createGain();
-      const xTalkRMain  = offline.createGain();
-      const xTalkLFromR = offline.createGain();
-      const xTalkRFromL = offline.createGain();
-      const xTalkMerge  = offline.createChannelMerger(2);
-
-      src.connect(inputGain); inputGain.connect(fluxGain);
-      fluxGain.connect(oversBypass);
-      oversBypass.connect(biasShape); biasShape.curve = (function(){return createBiasCurve(state.bias);})();
-      biasHF.gain.value = Math.max(-3, Math.min(3, -0.6 * state.bias));
-      biasShape.connect(biasHF);
-      biasHF.connect(headroomGain);
-
-      headroomGain.connect(headBump); headBump.connect(repro); repro.connect(deemph);
-      deemph.connect(outGain); outGain.connect(xfTrim); xfTrim.connect(outShaper);
-      outShaper.connect(lpOut);
-
-      // crosstalk gains
-      const ctLinOff = db2gain(CROSSTALK_DB);
-      const mainLinOff = 1.0 - ctLinOff;
-      xTalkLMain.gain.value  = mainLinOff;
-      xTalkRMain.gain.value  = mainLinOff;
-      xTalkLFromR.gain.value = ctLinOff;
-      xTalkRFromL.gain.value = ctLinOff;
-
-      lpOut.connect(xTalkSplit);
-      xTalkSplit.connect(xTalkLMain, 0);
-      xTalkSplit.connect(xTalkRFromL, 0);
-      xTalkSplit.connect(xTalkRMain, 1);
-      xTalkSplit.connect(xTalkLFromR, 1);
-
-      xTalkLMain.connect(xTalkMerge, 0, 0);
-      xTalkLFromR.connect(xTalkMerge, 0, 0);
-      xTalkRMain.connect(xTalkMerge, 0, 1);
-      xTalkRFromL.connect(xTalkMerge, 0, 1);
-
-      xTalkMerge.connect(offline.destination);
-
-      const fluxDbMap={185:0,250:2.6,370:6};
-      const fluxDb=safe(fluxDbMap[state.flux],0);
-      const inDbEff=safe(state.inDb,0)+INPUT_DB_OFFSET;
-      const headroomDb=safe(state.headroomDb,DEFAULT_HEADROOM_DB);
-      const outDb=safe(state.outDb,0);
-
-      let inGainVal=Math.max(db2gain(inDbEff),0.001);
-      let flGainVal=Math.max(db2gain(fluxDb),0.001);
-      let hrGainVal=Math.max(db2gain(headroomDb),0.001);
-      let outMakeupDb=state.transformer?1.0:0.0;
-      if(state.transformer) flGainVal*=db2gain(-1.0);
-
-      inputGain.gain.value=inGainVal;
-      fluxGain.gain.value=flGainVal;
-      headroomGain.gain.value=hrGainVal;
-      outGain.gain.value=Math.max(db2gain(outDb+outMakeupDb),0.001);
-
-      const eq=getEQ(safe(state.speed,15), state.eq);
-      const bumpExtra=safe((tapeProfiles[state.tapeType]||{}).bump,0);
-      headBump.frequency.value=safe(eq.bump[0],80); headBump.Q.value=1.1; headBump.gain.value=safe(eq.bump[1],2.0)+bumpExtra;
-      deemph.frequency.value=safe(eq.repro_hf[0],3180); deemph.gain.value=safe(eq.repro_hf[1],-10);
-
-      outShaper.curve = state.transformer ? (function(){const N=4096,c=new Float32Array(N);for(let i=0;i<N;i++){const x=i*2/(N-1)-1;c[i]=Math.tanh(x*3.0)*0.98;}return c;})() : identityCurve();
-      lpOut.frequency.value=state.transformer?22000:22050;
-      xfTrim.gain.value=xfTrimTarget;
-
-      src.start(0);
-      const rendered=await offline.startRendering();
-
-      const wav=renderWav24(rendered); // stereo
-      const blob=new Blob([wav],{type:'audio/wav'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='ANALOGEXACT_repro_48k24_STEREO.wav'; document.body.appendChild(a); a.click(); a.remove();
-      showMsg('Rendered STEREO 48k/24 WAV downloaded.');
+    function setVal(v){
+        const c=Math.min(max,Math.max(min,safe(v,0)));
+        state[key]=Math.round(c*1000)/1000;
+        const pct=(state[key]-min)/(max-min);
+        ind.style.transform=`rotate(${270*pct-135}deg)`;
+        val.textContent=fmt(state[key]);
+        // JUCE will read state via JS if needed
     }
-  }catch(e){ console.error(e); showMsg('Export failed. Try a shorter file.'); }
-});
+    setVal(state[key]??0);
 
-function renderWav24(buffer){
-  const numCh=buffer.numberOfChannels, sr=buffer.sampleRate, length=buffer.length;
-  const bytesPerSample=3, blockAlign=numCh*bytesPerSample, byteRate=sr*blockAlign;
-  const dataBytes=length*blockAlign, headerBytes=44, totalBytes=headerBytes+dataBytes;
-  const ab=new ArrayBuffer(totalBytes), dv=new DataView(ab); let o=0;
-  const ws=s=>{ for(let i=0;i<s.length;i++) dv.setUint8(o++,s.charCodeAt(i)); };
-  const w32=v=>{ dv.setUint32(o,v,true); o+=4; }; const w16=v=>{ dv.setUint16(o,v,true); o+=2; };
-  ws('RIFF'); w32(totalBytes-8); ws('WAVE'); ws('fmt '); w32(16); w16(1); w16(numCh); w32(sr); w32(byteRate); w16(blockAlign); w16(24);
-  ws('data'); w32(dataBytes);
-  const chData=[]; for(let ch=0;ch<numCh;ch++) chData.push(buffer.getChannelData(ch));
-  for(let i=0;i<length;i++){
-    for(let ch=0;ch<numCh;ch++){
-      let s=Math.max(-1,Math.min(1,chData[ch][i]));
-      let v=Math.floor(s*8388607);
-      dv.setUint8(o++,v&0xff); dv.setUint8(o++,(v>>8)&0xff); dv.setUint8(o++,(v>>16)&0xff);
-    }
-  }
-  return ab;
-}
-})();
-</script>
-</body>
-</html>
+    el.addEventListener("pointerdown",e=>{
+        dragging=true; pid=e.pointerId; startY=e.clientY; startVal=safe(state[key],0);
+        try{el.setPointerCapture(pid);}catch{};
+        document.body.style.cursor="ns-resize";
+        e.preventDefault();
+    });
+    el.addEventListener("pointermove",e=>{
+        if(!dragging||(pid!==null&&e.pointerId!==pid))return;
+        const dy=startY-e.clientY;
+        setVal(startVal+(dy/150)*(max-min));
+    });
+    const end=e=>{
+        if(!dragging||(pid!==null&&e.pointerId!==pid))return;
+        dragging=false;
+        try{el.releasePointerCapture(pid);}catch{};
+        pid=null; document.body.style.cursor="default";
+    };
+    el.addEventListener("pointerup",end);
+    el.addEventListener("pointercancel",end
