@@ -3,10 +3,6 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-// Short aliases to match the JUCE plugin templates
-using BusesProperties = juce::AudioProcessor::BusesProperties;
-using BusesLayout     = juce::AudioProcessor::BusesLayout;
-
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
@@ -32,7 +28,7 @@ public:
     void releaseResources() override;
 
    #if ! JucePlugin_PreferredChannelConfigurations
-    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    bool isBusesLayoutSupported (const juce::AudioProcessor::BusesLayout& layouts) const override;
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -58,7 +54,7 @@ private:
     // 16x oversampling: 2^4 = 16
     juce::dsp::Oversampling<float> oversampling;
 
-    // Core gain / EQ stages (all 768 kHz in the oversampled domain)
+    // Core gain / EQ stages (all in oversampled domain)
     juce::dsp::Gain<float>        inputGain;
     juce::dsp::Gain<float>        fluxGain;
     juce::dsp::Gain<float>        headroomGain;
@@ -68,7 +64,7 @@ private:
     juce::dsp::Gain<float>        outputGain;
 
     // Bias calibration (used in manual waveshaping)
-    const float biasDb = 1.8f;   // over-bias around +1.8 dB (from the WebAudio version)
+    const float biasDb = 1.8f;   // over-bias around +1.8 dB (from WebAudio)
 
     // VU meter state (RMS in linear)
     std::atomic<float> currentVUL { 0.0f };
