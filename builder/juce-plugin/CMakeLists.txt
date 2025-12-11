@@ -47,14 +47,13 @@ target_sources(HtmlToVstPlugin
         Source/PluginEditor.cpp
 )
 
-target_link_libraries(HtmlToVstPlugin
-    PRIVATE
-        HtmlUIData
-
-        # juce_add_plugin already links juce_audio_processors + juce_dsp
-        juce::juce_audio_utils
-        juce::juce_audio_devices
-        juce::juce_audio_basics
-        juce::juce_gui_basics
-        juce::juce_gui_extra
+target_link_libraries(HtmlToVstPlugin PRIVATE
+    HtmlUIData
+    juce::juce_audio_utils
+    juce::juce_audio_devices
+    juce::juce_audio_basics
+    juce::juce_audio_processors
+    juce::juce_dsp
+    juce::juce_gui_basics
+    juce::juce_gui_extra
 )
