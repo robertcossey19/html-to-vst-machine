@@ -108,33 +108,34 @@ void HtmlToVstAudioProcessor::updateDSP()
     const float inputOffsetDb = -5.0f;
     const float headroomDb    = -12.0f;
     const float fluxDb        = 2.6f;   // 250 nWb/m ≈ +2.6 dB
-    const float biasDb        = 1.8f;
+    const float biasDb        = 1.8f;   // NOTE: currently not applied (see below)
 
-    const float inputDbEff = uiInputDb + inputOffsetDb;
-    const float inGainLin  = Decibels::decibelsToGain (inputDbEff);
-    const float fluxLin    = Decibels::decibelsToGain (fluxDb);
-    const float headroomLin= Decibels::decibelsToGain (headroomDb);
+    const float inputDbEff  = uiInputDb + inputOffsetDb;
+    const float inGainLin   = Decibels::decibelsToGain (inputDbEff);
+    const float fluxLin     = Decibels::decibelsToGain (fluxDb);
+    const float headroomLin = Decibels::decibelsToGain (headroomDb);
 
     const float outMakeupDb = 1.0f; // transformer + flux comp
     const float outDbEff    = uiOutputDb + outMakeupDb;
 
-    inputGain.setGainLinear  (inGainLin);
-    fluxGain.setGainLinear   (fluxLin);
-    headroomGain.setGainLinear (headroomLin);
-    outputGain.setGainDecibels (outDbEff);
+    inputGain.setGainLinear     (inGainLin);
+    fluxGain.setGainLinear      (fluxLin);
+    headroomGain.setGainLinear  (headroomLin);
+    outputGain.setGainDecibels  (outDbEff);
 
-    // --- Bias curve / asymmetry (matches WebAudio createBiasCurve) ---
-    biasShaper.functionToUse = [biasDb] (float x)
+    // --- Bias curve / asymmetry ---
+    //
+    // JUCE's dsp::WaveShaper now stores a plain function pointer: float(*)(float)
+    // Capturing lambdas (like [biasDb]) cannot be assigned to that.
+    //
+    // For now: use a non-capturing soft clipper so the project builds and the plugin runs.
+    // We'll reintroduce true bias/asymmetry later using a safe non-capturing mechanism.
+    ignoreUnused (biasDb);
+
+    biasShaper.functionToUse = [] (float x) noexcept
     {
-        const float baseK = 1.6f;
-        const float asym  = 1.0f - jlimit (-0.25f, 0.25f, biasDb * 0.05f);
-
-        const float kPos = baseK;
-        const float kNeg = baseK / asym;
-
-        return x >= 0.0f
-            ? std::tanh (x * kPos)
-            : std::tanh (x * kNeg);
+        constexpr float k = 1.6f;
+        return std::tanh (x * k);
     };
 
     // --- Tape EQ: head bump + repro shelf (NAB @ 15 ips, 456) ---
@@ -165,7 +166,7 @@ void HtmlToVstAudioProcessor::updateDSP()
     }
 
     // --- Transformer output curve (matches createTransformerOutCurve) ---
-    transformerShape.functionToUse = [] (float x)
+    transformerShape.functionToUse = [] (float x) noexcept
     {
         constexpr float k    = 3.0f;
         constexpr float gain = 0.98f;
@@ -210,7 +211,7 @@ void HtmlToVstAudioProcessor::updateVuFromBuffer (AudioBuffer<float>& buffer)
 //==============================================================================
 
 void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
-                                            MidiBuffer& midi)
+                                           MidiBuffer& midi)
 {
     ScopedNoDenormals noDenormals;
     ignoreUnused (midi);
@@ -252,7 +253,7 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer,
     {
         const int n = buffer.getNumSamples();
         const float ct   = Decibels::decibelsToGain (-40.0f); // ~ -40 dB
-        const float main = 1.0f - ct;                          // keep unity-ish
+        const float main = 1.0f - ct;                         // keep unity-ish
 
         for (int i = 0; i < n; ++i)
         {
