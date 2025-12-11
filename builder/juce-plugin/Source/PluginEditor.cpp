@@ -1,29 +1,27 @@
 #include "PluginEditor.h"
-
-//==============================================================================
+#include "BinaryData.h"  // brings in BinaryData::ampex_ui_html etc.
 
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
     : AudioProcessorEditor (&p),
       processor (p),
-      webView() // default constructor only – no Options argument
+      webView (juce::WebBrowserComponent::Options{})
 {
+    setOpaque (true);
+
+    // Size can be whatever fits your UI nicely
+    setSize (1200, 700);
+
     addAndMakeVisible (webView);
 
-    // Load embedded HTML from BinaryData into data: URL
-    {
-        juce::String html = juce::String::fromUTF8 (BinaryData::ampex_ui_html,
-                                                    BinaryData::ampex_ui_htmlSize);
+    // Load embedded HTML (ampex_ui.html) from BinaryData
+    juce::String html = juce::String::fromUTF8 (BinaryData::ampex_ui_html,
+                                                BinaryData::ampex_ui_htmlSize);
 
-        juce::String url = "data:text/html;charset=utf-8," +
-                           juce::URL::addEscapeChars (html, true);
+    // Use a data: URL so we don't have to hit disk or the network
+    juce::String url = "data:text/html;charset=utf-8," + juce::URL::addEscapeChars (html, true);
+    webView.goToURL (url);
 
-        webView.goToURL (url);
-    }
-
-    setOpaque (true);
-    setSize (980, 640);
-
-    // Poll VU meters ~30 times per second
+    // Drive VU updates ~30 fps
     startTimerHz (30);
 }
 
@@ -31,8 +29,6 @@ HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor()
 {
     stopTimer();
 }
-
-//==============================================================================
 
 void HtmlToVstAudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -44,30 +40,28 @@ void HtmlToVstAudioProcessorEditor::resized()
     webView.setBounds (getLocalBounds());
 }
 
-//==============================================================================
-
 void HtmlToVstAudioProcessorEditor::timerCallback()
 {
-    // Pull VU from processor (dB)
     const float vuL = processor.getCurrentVUL();
     const float vuR = processor.getCurrentVUR();
 
-    // Normalise to 0–1 for UI:
-    // -40 dB => 0.0, +6 dB => 1.0
-    auto norm = [] (float db)
+    auto toDb = [] (float x) -> float
     {
-        const float clamped = juce::jlimit (-40.0f, 6.0f, db);
-        return (clamped + 40.0f) / 46.0f;
+        if (x <= 0.0f)
+            return -90.0f;
+
+        return 20.0f * std::log10 (x);
     };
 
-    const float nL = norm (vuL);
-    const float nR = norm (vuR);
+    const float dbL = toDb (vuL);
+    const float dbR = toDb (vuR);
 
-    // Call JS updateVU(leftNormalized, rightNormalized) if it exists
-    juce::String js;
-    js << "if(window.updateVU){updateVU("
-       << juce::String (nL, 3) << ","
-       << juce::String (nR, 3) << ");}";
+    // JS hook: your ampex_ui.html should define:
+    //   window.setVuMeters = function(dbL, dbR) { ... }
+    const juce::String js = juce::String::formatted (
+        "if (window.setVuMeters) window.setVuMeters(%f, %f);",
+        (double) dbL,
+        (double) dbR);
 
-    webView.evaluateJavascript (js);
+    webView.evaluateJavascript (js, nullptr);
 }
