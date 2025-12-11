@@ -25,7 +25,7 @@ HtmlToVstAudioProcessor::~HtmlToVstAudioProcessor() = default;
 
 //==============================================================================
 
-const String HtmlToVstAudioProcessor::getName()
+const String HtmlToVstAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
@@ -194,7 +194,7 @@ void HtmlToVstAudioProcessor::updateDSP()
                                             8000.0,
                                             0.707,
                                             std::pow (10.0f, biasTiltDb / 20.0f));
-    biasHF.coefficients = biasCoeffs;
+    biasHF.state = *biasCoeffs;
 
     // --- Tape EQ: NAB vs IEC curves from WebAudio getEQ() ---
     const bool useIEC = (defaultSpeedIps >= 30.0f); // 30 ips → IEC, 15 ips default NAB
@@ -238,14 +238,13 @@ void HtmlToVstAudioProcessor::updateDSP()
                                              eq.bumpFreq,
                                              1.1f,
                                              std::pow (10.0f, bumpDb / 20.0f));
+    headBump.state = *bumpCoeffs;
 
     auto deemphCoeffs = Coeff::makeHighShelf (fs,
                                               eq.hfFreq,
                                               0.707f,
                                               std::pow (10.0f, eq.hfDb / 20.0f));
-
-    headBump.coefficients = bumpCoeffs;
-    deemph.coefficients   = deemphCoeffs;
+    deemph.state = *deemphCoeffs;
 
     // --- Transformer output curve (matches WebAudio createTransformerOutCurve) ---
     transformerShape.functionToUse = [] (float x)
@@ -258,7 +257,7 @@ void HtmlToVstAudioProcessor::updateDSP()
     // --- Output bandwidth limit ~ 22 kHz at 768 kHz OS ---
     const double lpHz = transformerOn ? 22000.0 : 22050.0;
     auto lpCoeffs = Coeff::makeLowPass (fs, lpHz);
-    lpOut.coefficients = lpCoeffs;
+    lpOut.state = *lpCoeffs;
 }
 
 //==============================================================================
