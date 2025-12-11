@@ -1,31 +1,56 @@
-#include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include <juce_gui_extra/juce_gui_extra.h>
+#include "PluginProcessor.h"
 
+using namespace juce;
+
+//===============================================================
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
-    setSize (900, 600);
+    // Load embedded HTML UI:
+    webView.setBrowserType (WebBrowserComponent::webViewType::webView2);
 
-    auto html = juce::String::fromUTF8 (BinaryData::ampex_ui_html, 
-                                        BinaryData::ampex_ui_htmlSize);
+    String html = String::fromUTF8 (BinaryData::ampex_ui_html,
+                                    BinaryData::ampex_ui_htmlSize);
 
-    webView.reset (new juce::WebBrowserComponent());
-    webView->goToURL ("data:text/html," + juce::URL::addEscapeChars (html, true));
-    addAndMakeVisible (*webView);
+    webView.goToString (html);
+    addAndMakeVisible (webView);
+
+    // Paint entire UI background, so make editor larger
+    setSize (1400, 900);
+
+    // Start VU meter polling timer
+    startTimerHz (30);  // ~33ms refresh
 }
 
+//===============================================================
 HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor()
 {
 }
 
-void HtmlToVstAudioProcessorEditor::paint (juce::Graphics& g)
+//===============================================================
+void HtmlToVstAudioProcessorEditor::paint (Graphics& g)
 {
-    g.fillAll (juce::Colours::black);
+    g.fillAll (Colours::black);
 }
 
+//===============================================================
 void HtmlToVstAudioProcessorEditor::resized()
 {
-    if (webView.get() != nullptr)
-        webView->setBounds (getLocalBounds());
+    webView.setBounds (getLocalBounds());
+}
+
+//===============================================================
+void HtmlToVstAudioProcessorEditor::timerCallback()
+{
+    // Pull VU values from processor
+    vuLeft  = processor.currentVUL;
+    vuRight = processor.currentVUR;
+
+    // Expose them to HTML via JS:
+    String js = "window.setVUMeters("
+                + String(vuLeft) + ","
+                + String(vuRight) + ");";
+
+    webView.executeJavascript (js);
 }
