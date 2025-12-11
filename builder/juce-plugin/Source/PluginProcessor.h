@@ -1,6 +1,8 @@
 #pragma once
 
-#include "JuceHeader.h"
+// In this project we don’t have JuceHeader.h, we include the modules directly.
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
 //==============================================================================
 
@@ -20,7 +22,7 @@ public:
     double getTailLengthSeconds() const override;
 
     //==============================================================================
-    // We don’t actually use programs, but JUCE requires these.
+    // We don’t actually use programs, but AudioProcessor requires these.
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
