@@ -5,8 +5,7 @@
 
 //==============================================================================
 // Simple HTML UI editor: shows the embedded ampex_ui.html in a WebBrowserComponent.
-// No parameter or VU wiring yet – this is just to ensure the HTML renders correctly
-// in Cubase instead of showing URL-encoded text.
+// No parameter or VU wiring yet – this is just to ensure the HTML renders correctly.
 //
 class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
