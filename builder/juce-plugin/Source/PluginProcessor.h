@@ -10,10 +10,9 @@ public:
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
-    // NOTE: These signatures must match the headless AudioProcessor API
+    // These signatures MUST match juce_audio_processors_headless::AudioProcessor
 
-    // getName is non-const in the headless JUCE API
-    const juce::String getName() override;
+    const juce::String getName() const override;
 
     bool acceptsMidi() const override;
     bool producesMidi() const override;
