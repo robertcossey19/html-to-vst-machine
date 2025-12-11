@@ -30,10 +30,10 @@ const String HtmlToVstAudioProcessor::getName()
     return JucePlugin_Name;
 }
 
-bool HtmlToVstAudioProcessor::acceptsMidi()       { return false; }
-bool HtmlToVstAudioProcessor::producesMidi()      { return false; }
-bool HtmlToVstAudioProcessor::isMidiEffect()      { return false; }
-double HtmlToVstAudioProcessor::getTailLengthSeconds() { return 0.0; }
+bool HtmlToVstAudioProcessor::acceptsMidi() const       { return false; }
+bool HtmlToVstAudioProcessor::producesMidi() const      { return false; }
+bool HtmlToVstAudioProcessor::isMidiEffect() const      { return false; }
+double HtmlToVstAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
 int HtmlToVstAudioProcessor::getNumPrograms()           { return 1; }
 int HtmlToVstAudioProcessor::getCurrentProgram()        { return 0; }
