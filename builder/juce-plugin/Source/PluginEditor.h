@@ -1,26 +1,25 @@
 #pragma once
 
-#include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
+#include <juce_gui_extra/juce_gui_extra.h>
 
-// Simple editor: a WebBrowserComponent that renders ampex_ui.html
-// and a timer that pushes VU values into JS.
-class HtmlToVstAudioProcessorEditor
-    : public juce::AudioProcessorEditor,
-      private juce::Timer
+//==============================================================================
+// Simple HTML UI editor: shows the embedded ampex_ui.html in a WebBrowserComponent.
+// No parameter or VU wiring yet – this is just to ensure the HTML renders correctly
+// in Cubase instead of showing URL-encoded text.
+//
+class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
     ~HtmlToVstAudioProcessorEditor() override;
 
-    void paint (juce::Graphics&) override;
+    void paint   (juce::Graphics&) override;
     void resized() override;
 
 private:
-    void timerCallback() override;
-
     HtmlToVstAudioProcessor& processor;
-    juce::WebBrowserComponent webView;
+    std::unique_ptr<juce::WebBrowserComponent> webView;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
