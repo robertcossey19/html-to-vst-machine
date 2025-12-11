@@ -2,62 +2,34 @@ cmake_minimum_required(VERSION 3.15)
 
 project(HtmlToVstPlugin VERSION 1.0.0)
 
-# JUCE setup
 add_subdirectory(JUCE)
 
-# =====================================================================
-# EMBEDDED HTML UI (Option B)
-# =====================================================================
-
-juce_add_binary_data(HtmlToVst_UI
+juce_add_binary_data(HtmlUIData
     SOURCES
         Assets/UI/ampex_ui.html
 )
 
-# =====================================================================
-# PLUGIN DEFINITION
-# =====================================================================
-
 juce_add_plugin(HtmlToVstPlugin
-    COMPANY_NAME "ANALOGEXACT"
-    PLUGIN_MANUFACTURER_CODE ANEX
-    PLUGIN_CODE HTVP
+    COMPANY_NAME "AnalogExact"
+    BUNDLE_ID   "com.analogexact.htmltovst"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     FORMATS VST3
     PRODUCT_NAME "HTML to VST Plugin"
-    VST3_CATEGORIES "Fx"
 )
-
-# =====================================================================
-# SOURCE FILES
-# =====================================================================
 
 target_sources(HtmlToVstPlugin PRIVATE
     Source/PluginProcessor.cpp
-    Source/PluginProcessor.h
     Source/PluginEditor.cpp
-    Source/PluginEditor.h
-    Source/GeneratedParams.h
 )
-
-# =====================================================================
-# LINK LIBRARIES
-# =====================================================================
 
 target_link_libraries(HtmlToVstPlugin PRIVATE
-    juce::juce_audio_processors
+    HtmlUIData
     juce::juce_audio_utils
     juce::juce_audio_devices
-    juce::juce_dsp
+    juce::juce_audio_basics
+    juce::juce_gui_basics
     juce::juce_gui_extra
-    HtmlToVst_UI
-)
-
-# =====================================================================
-# NEEDED DEFINITIONS
-# =====================================================================
-
-target_compile_definitions(HtmlToVstPlugin PRIVATE
-    JUCE_WEB_BROWSER=1
-    JUCE_USE_CURL=1
-    JUCE_VST3_CAN_REPLACE_VST2=0
 )
