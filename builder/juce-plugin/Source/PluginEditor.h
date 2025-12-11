@@ -1,8 +1,7 @@
 #pragma once
-
 #include "PluginProcessor.h"
 
-class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
+class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor,
                                       private juce::Timer
 {
 public:
@@ -14,19 +13,14 @@ public:
 
 private:
     void timerCallback() override;
-
-    // Loads embedded HTML into the WebView correctly (data: URL)
-    void loadUI();
-
-    // Try a few common BinaryData names; fallback to a minimal page
-    juce::String getEmbeddedHtml() const;
+    void loadUiFromBinaryData();
 
     HtmlToVstAudioProcessor& processor;
 
-    // JUCE 7+ uses Options or default ctor
+    // JUCE 7+ WebBrowserComponent takes Options or default ctor (NOT bool)
     juce::WebBrowserComponent webView;
 
-    bool loadedOnce = false;
+    bool uiLoaded = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
