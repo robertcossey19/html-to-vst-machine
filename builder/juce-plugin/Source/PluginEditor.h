@@ -15,14 +15,9 @@ public:
 
 private:
     void timerCallback() override;
-    void sendVuToWebView (float vuLeftDb, float vuRightDb);
-    void loadEmbeddedHTML();
 
     HtmlToVstAudioProcessor& processor;
     juce::WebBrowserComponent webView;
-
-    float lastSentVUL = -100.0f;
-    float lastSentVUR = -100.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
