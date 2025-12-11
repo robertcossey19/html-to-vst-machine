@@ -1,56 +1,54 @@
 #include "PluginEditor.h"
-#include "PluginProcessor.h"
+#include "BinaryData.h"
 
 using namespace juce;
 
-//===============================================================
+//==============================================================================
 HtmlToVstAudioProcessorEditor::HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p),
+      processor (p)
 {
-    // Load embedded HTML UI:
-    webView.setBrowserType (WebBrowserComponent::webViewType::webView2);
+    // Size for your HTML UI
+    setSize (980, 600);
 
-    String html = String::fromUTF8 (BinaryData::ampex_ui_html,
-                                    BinaryData::ampex_ui_htmlSize);
-
-    webView.goToString (html);
     addAndMakeVisible (webView);
 
-    // Paint entire UI background, so make editor larger
-    setSize (1400, 900);
+    // Load embedded HTML from BinaryData as a data: URL
+    const auto html = String::fromUTF8 (BinaryData::ampex_ui_html,
+                                        BinaryData::ampex_ui_htmlSize);
 
-    // Start VU meter polling timer
-    startTimerHz (30);  // ~33ms refresh
+    const auto dataUrl = "data:text/html;charset=utf-8," + URL::addEscapeChars (html, true);
+    webView.goToURL (dataUrl);
+
+    // Pump VU data into JS
+    startTimerHz (30); // ~30 fps
 }
 
-//===============================================================
 HtmlToVstAudioProcessorEditor::~HtmlToVstAudioProcessorEditor()
 {
+    stopTimer();
 }
 
-//===============================================================
 void HtmlToVstAudioProcessorEditor::paint (Graphics& g)
 {
     g.fillAll (Colours::black);
 }
 
-//===============================================================
 void HtmlToVstAudioProcessorEditor::resized()
 {
     webView.setBounds (getLocalBounds());
 }
 
-//===============================================================
 void HtmlToVstAudioProcessorEditor::timerCallback()
 {
-    // Pull VU values from processor
-    vuLeft  = processor.currentVUL;
-    vuRight = processor.currentVUR;
+    const float l = processor.getCurrentVUL();
+    const float r = processor.getCurrentVUR();
 
-    // Expose them to HTML via JS:
-    String js = "window.setVUMeters("
-                + String(vuLeft) + ","
-                + String(vuRight) + ");";
+    // Call window.setVUMeters(left, right) inside ampex_ui.html
+    String js;
+    js << "if (window.setVUMeters) window.setVUMeters("
+       << String (l, 6) << ","
+       << String (r, 6) << ");";
 
-    webView.executeJavascript (js);
+    webView.evaluateJavascript (js, nullptr);
 }
