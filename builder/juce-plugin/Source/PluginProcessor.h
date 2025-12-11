@@ -1,11 +1,9 @@
 #pragma once
 
-#include <atomic>
-#include "JuceHeader.h"
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
-//==============================================================================
-
-class HtmlToVstAudioProcessor  : public juce::AudioProcessor
+class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
     HtmlToVstAudioProcessor();
@@ -20,17 +18,17 @@ public:
     double getTailLengthSeconds() const override;
 
     //==============================================================================
-    int getNumPrograms() override;
-    int getCurrentProgram() override;
+    int getNumPrograms() const override;
+    int getCurrentProgram() const override;
     void setCurrentProgram (int index) override;
-    const juce::String getProgramName (int index) override;
+    const juce::String getProgramName (int index) const override;
     void changeProgramName (int index, const juce::String& newName) override;
 
-    //==============================================================================
-#if ! JucePlugin_PreferredChannelConfigurations
+   #if ! JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-#endif
+   #endif
 
+    //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
@@ -44,40 +42,37 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //==============================================================================
-    /// Current VU values in dBFS (block-level RMS) for driving the HTML needles
-    float getCurrentVUL() const noexcept { return currentVUL.load(); }
-    float getCurrentVUR() const noexcept { return currentVUR.load(); }
-
-    /// Rebuilds the DSP graph & calibration (15ips / 250nWb/m / 456 / −12dB headroom)
-    void updateDSP();
+    // VU meters exposed to the editor (in dB)
+    std::atomic<float> currentVUL { 0.0f };
+    std::atomic<float> currentVUR { 0.0f };
 
 private:
-    //==============================================================================
-    double currentSampleRate = 0.0;
-    int    numChannels       = 0;
+    void updateDSP();
 
-    // 16x oversampling (2^4)
+    double lastSampleRate { 44100.0 };
+
+    // 16x oversampling (2x^4)
     juce::dsp::Oversampling<float> oversampling;
 
-    // Gain structure: input, flux, headroom, output
+    // Core gain stages (match WebAudio graph)
     juce::dsp::Gain<float> inputGain;
     juce::dsp::Gain<float> fluxGain;
     juce::dsp::Gain<float> headroomGain;
-    juce::dsp::Gain<float> outputGain;
+    juce::dsp::Gain<float> repro;
+    juce::dsp::Gain<float> monitorRe;
+    juce::dsp::Gain<float> outGain;
+    juce::dsp::Gain<float> xfTrim;
 
-    // Tape EQ: head bump + repro shelf + output HF limit
+    // EQ / filters
+    std::shared_ptr<juce::dsp::IIR::Coefficients<float>> biasTilt;
+    juce::dsp::IIR::Filter<float> biasHF;
     juce::dsp::IIR::Filter<float> headBump;
-    juce::dsp::IIR::Filter<float> reproHighShelf;
-    juce::dsp::IIR::Filter<float> lowpassOut;
+    juce::dsp::IIR::Filter<float> deemph;
+    juce::dsp::IIR::Filter<float> lpOut;
 
-    // Bias symmetry & transformer “iron” shaper
+    // Non-linear blocks
     juce::dsp::WaveShaper<float> biasShaper;
     juce::dsp::WaveShaper<float> transformerShape;
-
-    // Block-level VU values
-    std::atomic<float> currentVUL { -80.0f };
-    std::atomic<float> currentVUR { -80.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessor)
 };
