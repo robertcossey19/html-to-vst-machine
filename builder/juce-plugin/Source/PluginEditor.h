@@ -1,11 +1,7 @@
 #pragma once
-
-#include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 
-//==============================================================================
-class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
-                                      private juce::Timer
+class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
@@ -15,15 +11,18 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override;
-    void loadHtmlUi();
-
     HtmlToVstAudioProcessor& processor;
-
     juce::WebBrowserComponent webView;
-    juce::Label status;
 
     juce::File tempHtmlFile;
+    bool uiLoaded = false;
+
+    static juce::String urlDecodeToString (const juce::String& s);
+    static bool looksLikeHtml (const juce::String& s);
+    static juce::String makeMissingUiHtml (const juce::String& extra);
+
+    void writeHtmlToTempAndLoad (const juce::String& html);
+    void loadUiFromBinaryData();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
