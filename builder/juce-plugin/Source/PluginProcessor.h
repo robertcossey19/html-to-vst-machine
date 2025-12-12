@@ -2,18 +2,14 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
-
 #include <atomic>
-#include <functional>
 
-//==============================================================================
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
     HtmlToVstAudioProcessor();
     ~HtmlToVstAudioProcessor() override;
 
-    //==============================================================================
     const juce::String getName() const override;
 
     bool acceptsMidi() const override;
@@ -27,7 +23,6 @@ public:
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
 
-    //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
@@ -37,35 +32,51 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
-    //==============================================================================
     bool hasEditor() const override;
     juce::AudioProcessorEditor* createEditor() override;
 
-    //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //==============================================================================
-    float getVuLDb() const noexcept { return currentVUL.load(); }
-    float getVuRDb() const noexcept { return currentVUR.load(); }
+    // --- UI -> DSP bridge (called by editor when the web UI changes) ---
+    void setUiParameters (float inDb, float outDb, float biasDb, bool transformerOn);
+
+    // --- VU accessors (dB RMS) ---
+    float getCurrentVUL() const noexcept { return currentVUL.load(); }
+    float getCurrentVUR() const noexcept { return currentVUR.load(); }
 
 private:
-    void updateDSP();
+    void updateDSP(); // static filters + fixed calibration parts
+    void applyUiToDSPIfNeeded(); // gains/bias/transformer from UI
     void updateVuFromBuffer (juce::AudioBuffer<float>& buffer);
 
-    double currentSampleRate = 0.0;
-    int    numChannels       = 2;
+    double currentSampleRate = 44100.0;
+    int numChannels = 2;
 
-    // 16x oversampling = 2^4 stages
-    juce::dsp::Oversampling<float> oversampling { 2, 4, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
+    // 16x oversampling = 4 stages of 2x
+    juce::dsp::Oversampling<float> oversampling { 2, 4, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true };
 
-    juce::dsp::Gain<float> inputGain, fluxGain, headroomGain, outputGain;
-    juce::dsp::IIR::Filter<float> headBump, reproHighShelf, lowpassOut;
+    // DSP blocks
+    juce::dsp::Gain<float> inputGain;
+    juce::dsp::Gain<float> fluxGain;
+    juce::dsp::Gain<float> headroomGain;
+    juce::dsp::IIR::Filter<float> headBump;
+    juce::dsp::IIR::Filter<float> reproHighShelf;
+    juce::dsp::WaveShaper<float> biasShaper;
+    juce::dsp::WaveShaper<float> transformerShape;
+    juce::dsp::IIR::Filter<float> lowpassOut;
+    juce::dsp::Gain<float> outputGain;
 
-    using ShaperFn = std::function<float(float)>;
-    juce::dsp::WaveShaper<float, ShaperFn> biasShaper;
-    juce::dsp::WaveShaper<float, ShaperFn> transformerShape;
+    // --- UI state (atomic because web UI thread -> audio thread) ---
+    std::atomic<float> uiInputDb { 0.0f };
+    std::atomic<float> uiOutputDb { 0.0f };
+    std::atomic<float> uiBiasDb { 0.0f };
+    std::atomic<int>   uiTransformerOn { 1 };
+    std::atomic<bool>  uiDirty { true };
 
+    bool transformerEnabled = true; // cached on audio thread
+
+    // VU metering (post-downsample, includes crosstalk)
     std::atomic<float> currentVUL { -60.0f };
     std::atomic<float> currentVUR { -60.0f };
 
