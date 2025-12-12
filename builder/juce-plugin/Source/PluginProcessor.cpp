@@ -1,15 +1,18 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <vector>
+#include <cmath>
+
 using namespace juce;
 
+// Normalize loose UI ids to real parameter IDs
 static String normaliseParamId (String s)
 {
     s = s.trim().toLowerCase();
 
-    // Accept a bunch of UI aliases so you don’t have to “match exact strings” in HTML.
     const bool hasGain = s.contains ("gain");
-    const bool hasIn   = s.contains ("in") || s.contains ("input") || s.contains ("pre");
+    const bool hasIn   = s.contains ("in")  || s.contains ("input")  || s.contains ("pre");
     const bool hasOut  = s.contains ("out") || s.contains ("output") || s.contains ("post");
 
     if (hasGain && hasIn)  return "inGainDb";
@@ -44,10 +47,10 @@ AudioProcessorValueTreeState::ParameterLayout HtmlToVstAudioProcessor::createPar
 
 //==============================================================================
 HtmlToVstAudioProcessor::HtmlToVstAudioProcessor()
-: AudioProcessor (BusesProperties()
-                    .withInput  ("Input",  AudioChannelSet::stereo(), true)
-                    .withOutput ("Output", AudioChannelSet::stereo(), true)),
-  apvts (*this, nullptr, "STATE", createParameterLayout())
+    : AudioProcessor (BusesProperties()
+        .withInput  ("Input",  AudioChannelSet::stereo(), true)
+        .withOutput ("Output", AudioChannelSet::stereo(), true))
+    , apvts (*this, nullptr, "STATE", createParameterLayout())
 {
 }
 
@@ -55,9 +58,9 @@ HtmlToVstAudioProcessor::~HtmlToVstAudioProcessor() = default;
 
 //==============================================================================
 const String HtmlToVstAudioProcessor::getName() const { return JucePlugin_Name; }
-bool HtmlToVstAudioProcessor::acceptsMidi() const { return false; }
-bool HtmlToVstAudioProcessor::producesMidi() const { return false; }
-bool HtmlToVstAudioProcessor::isMidiEffect() const { return false; }
+bool   HtmlToVstAudioProcessor::acceptsMidi() const { return false; }
+bool   HtmlToVstAudioProcessor::producesMidi() const { return false; }
+bool   HtmlToVstAudioProcessor::isMidiEffect() const { return false; }
 double HtmlToVstAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
 int HtmlToVstAudioProcessor::getNumPrograms() { return 1; }
@@ -90,9 +93,9 @@ void HtmlToVstAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     const auto osFactor = (double) oversampling.getOversamplingFactor();
 
     dsp::ProcessSpec spec;
-    spec.sampleRate = currentSampleRate * osFactor;
+    spec.sampleRate       = currentSampleRate * osFactor;
     spec.maximumBlockSize = (uint32) (samplesPerBlock * osFactor);
-    spec.numChannels = (uint32) numChannels;
+    spec.numChannels      = (uint32) numChannels;
 
     inputGain.prepare (spec);
     fluxGain.prepare (spec);
@@ -108,7 +111,7 @@ void HtmlToVstAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     reproHighShelf.reset();
     lowpassOut.reset();
 
-    // Non-capturing shapers (JUCE wants float(*)(float) here on your version)
+    // Non-capturing shapers (works even if your JUCE WaveShaper expects float(*)(float))
     biasShaper.functionToUse = [] (float x) noexcept
     {
         constexpr float k = 1.6f;
@@ -136,26 +139,28 @@ void HtmlToVstAudioProcessor::updateFixedFilters()
     const auto osRate = currentSampleRate * (double) oversampling.getOversamplingFactor();
     using Coeff = dsp::IIR::Coefficients<float>;
 
-    // Head bump (fixed)
+    // Head bump
     {
-        const float bumpFreq = 80.0f;
-        const float bumpQ = 1.1f;
-        const float bumpGainDb = 2.4f; // tuned “456-ish”
-        headBump.coefficients = Coeff::makePeakFilter (osRate, bumpFreq, bumpQ, Decibels::decibelsToGain (bumpGainDb));
+        const float bumpFreq   = 80.0f;
+        const float bumpQ      = 1.1f;
+        const float bumpGainDb = 2.4f;
+        *headBump.state = *Coeff::makePeakFilter (osRate, bumpFreq, bumpQ,
+                                                  Decibels::decibelsToGain (bumpGainDb));
     }
 
-    // Repro shelf (fixed)
+    // Repro shelf
     {
         const float shelfFreq = 3180.0f;
-        const float shelfQ = 0.707f;
-        const float shelfDb = -0.75f;
-        reproHighShelf.coefficients = Coeff::makeHighShelf (osRate, shelfFreq, shelfQ, Decibels::decibelsToGain (shelfDb));
+        const float shelfQ    = 0.707f;
+        const float shelfDb   = -0.75f;
+        *reproHighShelf.state = *Coeff::makeHighShelf (osRate, shelfFreq, shelfQ,
+                                                       Decibels::decibelsToGain (shelfDb));
     }
 
-    // Output LPF (fixed)
+    // Output LPF
     {
         const float lpFreq = 22000.0f;
-        lowpassOut.coefficients = Coeff::makeLowPass (osRate, lpFreq);
+        *lowpassOut.state = *Coeff::makeLowPass (osRate, lpFreq);
     }
 }
 
@@ -163,9 +168,11 @@ void HtmlToVstAudioProcessor::updateFixedFilters()
 void HtmlToVstAudioProcessor::setParameterFromUI (const String& paramIdOrAlias, float value)
 {
     const auto id = normaliseParamId (paramIdOrAlias);
+
     if (auto* p = apvts.getParameter (id))
     {
         const float v01 = jlimit (0.0f, 1.0f, p->convertTo0to1 (value));
+
         p->beginChangeGesture();
         p->setValueNotifyingHost (v01);
         p->endChangeGesture();
@@ -176,7 +183,8 @@ void HtmlToVstAudioProcessor::setParameterFromUI (const String& paramIdOrAlias, 
 void HtmlToVstAudioProcessor::updateVuFromBuffer (AudioBuffer<float>& buffer)
 {
     const int numSamples = buffer.getNumSamples();
-    if (numSamples <= 0) return;
+    if (numSamples <= 0)
+        return;
 
     auto calcDb = [numSamples] (const float* data) -> float
     {
@@ -184,7 +192,7 @@ void HtmlToVstAudioProcessor::updateVuFromBuffer (AudioBuffer<float>& buffer)
         for (int i = 0; i < numSamples; ++i)
             sum += (double) data[i] * (double) data[i];
 
-        const auto rms = std::sqrt (sum / jmax (1, numSamples));
+        const auto rms = std::sqrt (sum / (double) jmax (1, numSamples));
         return Decibels::gainToDecibels ((float) rms, -100.0f);
     };
 
@@ -210,29 +218,29 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
     if (buffer.getNumChannels() == 0)
         return;
 
-    // --- Read params (audio thread safe) ---
+    // --- Read params (audio-thread safe) ---
     const float inDbUI  = apvts.getRawParameterValue ("inGainDb")->load();
     const float outDbUI = apvts.getRawParameterValue ("outGainDb")->load();
     const bool transformerOn = apvts.getRawParameterValue ("transformerOn")->load() > 0.5f;
 
-    // --- Match your web “record path offset” ---
+    // --- Calibration ---
     const float inputOffsetDb = -5.0f;
     const float outMakeupDb   =  1.0f;
 
-    inputGain.setGainDecibels (inDbUI + inputOffsetDb);
+    inputGain.setGainDecibels  (inDbUI  + inputOffsetDb);
     outputGain.setGainDecibels (outDbUI + outMakeupDb);
 
-    // Fixed “flux/headroom” calibration (you can parameterize later)
-    fluxGain.setGainDecibels (2.6f);     // ~250 nWb/m
+    // Fixed “flux/headroom”
+    fluxGain.setGainDecibels (2.6f);
     headroomGain.setGainDecibels (-12.0f);
 
     dsp::AudioBlock<float> block (buffer);
 
-    // 16x oversampling up
+    // Up-sample
     auto osBlock = oversampling.processSamplesUp (block);
     dsp::ProcessContextReplacing<float> ctx (osBlock);
 
-    // Chain
+    // DSP chain
     inputGain.process (ctx);
     fluxGain.process (ctx);
     headroomGain.process (ctx);
@@ -247,10 +255,10 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
     lowpassOut.process (ctx);
     outputGain.process (ctx);
 
-    // Downsample back
+    // Down-sample
     oversampling.processSamplesDown (block);
 
-    // Stereo crosstalk (post)
+    // Simple stereo crosstalk (post)
     if (buffer.getNumChannels() > 1)
     {
         auto* left  = buffer.getWritePointer (0);
@@ -274,7 +282,6 @@ void HtmlToVstAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
 
 //==============================================================================
 bool HtmlToVstAudioProcessor::hasEditor() const { return true; }
-
 AudioProcessorEditor* HtmlToVstAudioProcessor::createEditor()
 {
     return new HtmlToVstAudioProcessorEditor (*this);
