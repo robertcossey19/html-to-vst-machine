@@ -1,20 +1,26 @@
 #pragma once
-#include <JuceHeader.h>
 
-class HtmlToVstAudioProcessor  : public juce::AudioProcessor
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
+#include <atomic>
+
+class HtmlToVstAudioProcessor final : public juce::AudioProcessor
 {
 public:
     HtmlToVstAudioProcessor();
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    //==============================================================================
     const juce::String getName() const override;
+
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
 
-    //==============================================================================
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
@@ -40,34 +46,39 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
+    // UI bridge entrypoint (called from PluginEditor when web UI sends updates)
     void setParameterFromUI (const juce::String& paramIdOrAlias, float value);
 
-    float getVuLDb() const noexcept { return currentVUL.load(); }
-    float getVuRDb() const noexcept { return currentVUR.load(); }
+    // Meters for UI
+    float getVUL() const noexcept { return currentVUL.load(); }
+    float getVUR() const noexcept { return currentVUR.load(); }
 
-    juce::AudioProcessorValueTreeState apvts;
+    // Access APVTS for editor polling (thread-safe reads only)
+    juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts; }
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-
+    //==============================================================================
     void updateFixedFilters();
     void updateVuFromBuffer (juce::AudioBuffer<float>& buffer);
 
     //==============================================================================
-    std::atomic<float> currentVUL { -60.0f };
-    std::atomic<float> currentVUR { -60.0f };
+    juce::AudioProcessorValueTreeState apvts;
 
-    double currentSampleRate = 44100.0;
+    juce::dsp::Oversampling<float> oversampling { 2, 4,
+        juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
+
+    double currentSampleRate = 0.0;
     int numChannels = 2;
 
-    // Oversampling: 16x (2^4)
-    juce::dsp::Oversampling<float> oversampling { 2, 4,
-        juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true };
-
-    // DSP blocks
+    // DSP chain
     juce::dsp::Gain<float> inputGain, fluxGain, headroomGain, outputGain;
-    juce::dsp::WaveShaper<float> biasShaper, transformerShape;
+    juce::dsp::WaveShaper<float> biasShaper;
     juce::dsp::IIR::Filter<float> headBump, reproHighShelf, lowpassOut;
+    juce::dsp::WaveShaper<float> transformerShape;
+
+    // meters
+    std::atomic<float> currentVUL { -90.0f };
+    std::atomic<float> currentVUR { -90.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessor)
 };
