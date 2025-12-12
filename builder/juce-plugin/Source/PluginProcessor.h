@@ -1,25 +1,24 @@
 #pragma once
 
-#include <atomic>
-
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
+#include <atomic>
+#include <functional>
+
+//==============================================================================
 class HtmlToVstAudioProcessor : public juce::AudioProcessor
 {
 public:
-    //==============================================================================
     HtmlToVstAudioProcessor();
     ~HtmlToVstAudioProcessor() override;
 
     //==============================================================================
-    // Required AudioProcessor overrides (these are what JUCE was complaining about)
     const juce::String getName() const override;
 
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
-
     double getTailLengthSeconds() const override;
 
     int getNumPrograms() override;
@@ -47,37 +46,26 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    // VU accessors for the Web UI
-    float getCurrentVUL() const noexcept { return currentVUL.load(); }
-    float getCurrentVUR() const noexcept { return currentVUR.load(); }
+    float getVuLDb() const noexcept { return currentVUL.load(); }
+    float getVuRDb() const noexcept { return currentVUR.load(); }
 
 private:
-    //==============================================================================
     void updateDSP();
     void updateVuFromBuffer (juce::AudioBuffer<float>& buffer);
 
-    double currentSampleRate = 44100.0;
+    double currentSampleRate = 0.0;
     int    numChannels       = 2;
 
-    // 16x oversampling = 4 stages of 2x
-    juce::dsp::Oversampling<float> oversampling {
-        2, 4,
-        juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR,
-        true
-    };
+    // 16x oversampling = 2^4 stages
+    juce::dsp::Oversampling<float> oversampling { 2, 4, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR };
 
-    // Core DSP blocks (modeled after your WebAudio graph)
-    juce::dsp::Gain<float>              inputGain;
-    juce::dsp::Gain<float>              fluxGain;
-    juce::dsp::Gain<float>              headroomGain;
-    juce::dsp::IIR::Filter<float>       headBump;
-    juce::dsp::IIR::Filter<float>       reproHighShelf;
-    juce::dsp::WaveShaper<float>        biasShaper;
-    juce::dsp::WaveShaper<float>        transformerShape;
-    juce::dsp::IIR::Filter<float>       lowpassOut;
-    juce::dsp::Gain<float>              outputGain;
+    juce::dsp::Gain<float> inputGain, fluxGain, headroomGain, outputGain;
+    juce::dsp::IIR::Filter<float> headBump, reproHighShelf, lowpassOut;
 
-    // VU metering (post-downsample, includes crosstalk)
+    using ShaperFn = std::function<float(float)>;
+    juce::dsp::WaveShaper<float, ShaperFn> biasShaper;
+    juce::dsp::WaveShaper<float, ShaperFn> transformerShape;
+
     std::atomic<float> currentVUL { -60.0f };
     std::atomic<float> currentVUR { -60.0f };
 
