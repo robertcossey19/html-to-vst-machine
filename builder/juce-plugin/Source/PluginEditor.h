@@ -1,34 +1,51 @@
 #pragma once
-
-#include <juce_gui_extra/juce_gui_extra.h>
+#include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class HtmlToVstAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                           private juce::Timer,
-                                           private juce::WebBrowserComponent::Listener
+class HtmlToVstPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                           private juce::Timer
 {
 public:
-    explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
-    ~HtmlToVstAudioProcessorEditor() override;
+    explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
+    ~HtmlToVstPluginAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
+    // A WebBrowserComponent subclass so we can intercept juce:// messages
+    class UiWebView : public juce::WebBrowserComponent
+    {
+    public:
+        explicit UiWebView (HtmlToVstPluginAudioProcessorEditor& ownerIn)
+        : owner (ownerIn) {}
+
+        bool pageAboutToLoad (const juce::String& newURL) override
+        {
+            // Intercept and consume UI -> DSP messages
+            if (newURL.startsWithIgnoreCase ("juce:"))
+            {
+                owner.processor.handleUiMessageUrl (newURL);
+                return false; // prevent navigation
+            }
+
+            return true;
+        }
+
+    private:
+        HtmlToVstPluginAudioProcessorEditor& owner;
+    };
+
     void timerCallback() override;
-    bool pageAboutToLoad (const juce::String& newURL) override;
+    void loadHtmlUi();
 
-    void ensureHtmlReady();
-    void ensureBridgeInjected();
+    HtmlToVstPluginAudioProcessor& processor;
 
-    HtmlToVstAudioProcessor& processor;
-    juce::WebBrowserComponent webView;
+    UiWebView webView;
 
-    juce::File tempDir;
-    juce::File tempHtmlFile;
+    juce::File uiTempDir;
+    juce::File uiTempFile;
+    bool uiLoaded = false;
 
-    bool htmlReady = false;
-    bool bridgeInjected = false;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
