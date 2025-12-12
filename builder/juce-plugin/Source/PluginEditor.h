@@ -1,10 +1,11 @@
 #pragma once
-#include <JuceHeader.h>
 
-class HtmlToVstAudioProcessor;
+#include <juce_gui_extra/juce_gui_extra.h>
+#include "PluginProcessor.h"
 
-class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
-                                       private juce::Timer
+class HtmlToVstAudioProcessorEditor final : public juce::AudioProcessorEditor,
+                                           private juce::Timer,
+                                           private juce::WebBrowserComponent::Listener
 {
 public:
     explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
@@ -14,27 +15,19 @@ public:
     void resized() override;
 
 private:
-    class BridgeBrowser : public juce::WebBrowserComponent
-    {
-    public:
-        explicit BridgeBrowser (HtmlToVstAudioProcessorEditor& o)
-        : juce::WebBrowserComponent (false), owner (o) {}
-
-        bool pageAboutToLoad (const juce::String& newURL) override;
-        void pageFinishedLoading (const juce::String& url) override;
-
-    private:
-        HtmlToVstAudioProcessorEditor& owner;
-    };
-
     void timerCallback() override;
-    void loadUiToTempFileAndNavigate();
-    void injectBridgeJs();
+    bool pageAboutToLoad (const juce::String& newURL) override;
+
+    void ensureHtmlReady();
+    void ensureBridgeInjected();
 
     HtmlToVstAudioProcessor& processor;
-    BridgeBrowser webView;
+    juce::WebBrowserComponent webView;
 
+    juce::File tempDir;
     juce::File tempHtmlFile;
+
+    bool htmlReady = false;
     bool bridgeInjected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
