@@ -1,7 +1,10 @@
 #pragma once
+
+#include <juce_gui_extra/juce_gui_extra.h>
 #include "PluginProcessor.h"
 
-class HtmlToVstAudioProcessorEditor : public juce::AudioProcessorEditor
+class HtmlToVstAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                       private juce::Timer
 {
 public:
     explicit HtmlToVstAudioProcessorEditor (HtmlToVstAudioProcessor&);
@@ -11,18 +14,31 @@ public:
     void resized() override;
 
 private:
-    HtmlToVstAudioProcessor& processor;
-    juce::WebBrowserComponent webView;
+    class InterceptingWebView : public juce::WebBrowserComponent
+    {
+    public:
+        explicit InterceptingWebView (HtmlToVstAudioProcessorEditor& owner)
+            : juce::WebBrowserComponent(), editor (owner) {}
 
-    juce::File tempHtmlFile;
-    bool uiLoaded = false;
+        bool pageAboutToLoad (const juce::String& newURL) override;
 
-    static juce::String urlDecodeToString (const juce::String& s);
-    static bool looksLikeHtml (const juce::String& s);
+    private:
+        HtmlToVstAudioProcessorEditor& editor;
+    };
+
+    void timerCallback() override;
+
+    void loadUi();
+    juce::String getEmbeddedHtmlOrFallback (juce::String& debugInfoOut) const;
     static juce::String makeMissingUiHtml (const juce::String& extra);
 
-    void writeHtmlToTempAndLoad (const juce::String& html);
-    void loadUiFromBinaryData();
+    void handleJuceUrl (const juce::String& urlString);
+
+    HtmlToVstAudioProcessor& processor;
+    InterceptingWebView webView;
+
+    juce::File tempDir;
+    juce::File tempHtmlFile;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstAudioProcessorEditor)
 };
