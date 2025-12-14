@@ -1,9 +1,15 @@
 #pragma once
-#include <JuceHeader.h>
+
 #include "PluginProcessor.h"
 
-class HtmlToVstPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                           private juce::Timer
+#if __has_include(<JuceHeader.h>)
+  #include <JuceHeader.h>
+#else
+  #include <juce_gui_extra/juce_gui_extra.h>
+#endif
+
+class HtmlToVstPluginAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                             private juce::Timer
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
@@ -13,39 +19,56 @@ public:
     void resized() override;
 
 private:
-    // A WebBrowserComponent subclass so we can intercept juce:// messages
-    class UiWebView : public juce::WebBrowserComponent
+    void timerCallback() override;
+    void loadHtmlUi();
+    void pushMetersToUi();
+
+    HtmlToVstPluginAudioProcessor& processor;
+
+   #if defined(JUCE_MAJOR_VERSION) && (JUCE_MAJOR_VERSION >= 7)
+    class BrowserListener : public juce::WebBrowserComponent::PageLoadListener
     {
     public:
-        explicit UiWebView (HtmlToVstPluginAudioProcessorEditor& ownerIn)
-        : owner (ownerIn) {}
+        explicit BrowserListener (HtmlToVstPluginAudioProcessor& p) : proc (p) {}
 
         bool pageAboutToLoad (const juce::String& newURL) override
         {
-            // Intercept and consume UI -> DSP messages
             if (newURL.startsWithIgnoreCase ("juce:"))
             {
-                owner.processor.handleUiMessageUrl (newURL);
-                return false; // prevent navigation
+                proc.handleUiMessageUrl (newURL);
+                return false; // cancel navigation
             }
-
             return true;
         }
 
     private:
-        HtmlToVstPluginAudioProcessorEditor& owner;
+        HtmlToVstPluginAudioProcessor& proc;
     };
 
-    void timerCallback() override;
-    void loadHtmlUi();
+    BrowserListener browserListener;
+    juce::WebBrowserComponent webView;
+   #else
+    class InterceptingBrowser : public juce::WebBrowserComponent
+    {
+    public:
+        explicit InterceptingBrowser (HtmlToVstPluginAudioProcessor& p) : proc (p) {}
 
-    HtmlToVstPluginAudioProcessor& processor;
+        bool pageAboutToLoad (const juce::String& newURL) override
+        {
+            if (newURL.startsWithIgnoreCase ("juce:"))
+            {
+                proc.handleUiMessageUrl (newURL);
+                return false;
+            }
+            return true;
+        }
 
-    UiWebView webView;
+    private:
+        HtmlToVstPluginAudioProcessor& proc;
+    };
 
-    juce::File uiTempDir;
-    juce::File uiTempFile;
-    bool uiLoaded = false;
+    InterceptingBrowser webView;
+   #endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
