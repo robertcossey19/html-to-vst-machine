@@ -1,23 +1,51 @@
+/*
+  ==============================================================================
+
+    PluginEditor.cpp
+
+  ==============================================================================
+*/
+
+#include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "BinaryData.h"
+
+HtmlToVstPluginAudioProcessorEditor::InterceptingBrowser::InterceptingBrowser (HtmlToVstPluginAudioProcessor& p)
+    : juce::WebBrowserComponent(),
+      processor (p)
+{
+}
+
+bool HtmlToVstPluginAudioProcessorEditor::InterceptingBrowser::pageAboutToLoad (const juce::String& newURL)
+{
+    // Intercept messages from the HTML UI.
+    // Example: juce://set?param=gain&value=0.5
+    if (newURL.startsWithIgnoreCase ("juce:"))
+    {
+        processor.handleUiMessageUrl (newURL);
+        return false; // prevent navigation
+    }
+
+    return true;
+}
 
 HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor& p)
-    : AudioProcessorEditor (&p)
-    , processor (p)
-   #if defined(JUCE_MAJOR_VERSION) && (JUCE_MAJOR_VERSION >= 7)
-    , browserListener (p)
-    , webView (juce::WebBrowserComponent::Options{}.withPageLoadListener (&browserListener))
-   #endif
+    : juce::AudioProcessorEditor (&p),
+      processor (p),
+      webView (p)
 {
-    setSize (980, 640);
+    setOpaque (true);
+    setSize (820, 520);
 
     addAndMakeVisible (webView);
-    loadHtmlUi();
 
+    loadHtmlUi();
     startTimerHz (30);
 }
 
-HtmlToVstPluginAudioProcessorEditor::~HtmlToVstPluginAudioProcessorEditor() = default;
+HtmlToVstPluginAudioProcessorEditor::~HtmlToVstPluginAudioProcessorEditor()
+{
+    stopTimer();
+}
 
 void HtmlToVstPluginAudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -31,38 +59,43 @@ void HtmlToVstPluginAudioProcessorEditor::resized()
 
 void HtmlToVstPluginAudioProcessorEditor::timerCallback()
 {
+    if (! uiLoaded)
+    {
+        if (uiRetryCount++ < 8)
+            loadHtmlUi();
+
+        return;
+    }
+
     pushMetersToUi();
 }
 
 void HtmlToVstPluginAudioProcessorEditor::loadHtmlUi()
 {
-    int size = 0;
-    auto* data = BinaryData::getNamedResource ("index.html", size);
+    // HtmlUIData target should generate BinaryData::index_html / index_htmlSize
+    const auto* data = BinaryData::index_html;
+    const auto size  = static_cast<size_t> (BinaryData::index_htmlSize);
 
-    if (data == nullptr || size <= 0)
-    {
-        webView.goToURL ("data:text/html,<html><body><h3>Missing index.html in BinaryData</h3></body></html>");
+    if (data == nullptr || size == 0)
         return;
-    }
 
-    const juce::String html (reinterpret_cast<const char*> (data), size);
-    const juce::String b64 = juce::Base64::toBase64 (html.toRawUTF8(), (size_t) html.getNumBytesAsUTF8());
+    const auto htmlBase64 = juce::Base64::toBase64 (data, size);
+    const juce::String url = "data:text/html;base64," + htmlBase64;
 
-    const juce::String url = "data:text/html;base64," + b64;
     webView.goToURL (url);
+    uiLoaded = true;
 }
 
 void HtmlToVstPluginAudioProcessorEditor::pushMetersToUi()
 {
-    const float l = processor.getOutputMeterL();
-    const float r = processor.getOutputMeterR();
+    const auto l = processor.getOutputMeterL();
+    const auto r = processor.getOutputMeterR();
 
-    juce::String js;
-    js << "window.dispatchEvent(new CustomEvent('juce-meter', { detail: { l:"
-       << juce::String (l, 6)
-       << ", r:"
-       << juce::String (r, 6)
-       << " } }));";
+    const juce::String js =
+        "if (window.juce && window.juce.onMeters) {"
+        "  window.juce.onMeters({ l: " + juce::String (l, 6) + ", r: " + juce::String (r, 6) + " });"
+        "}";
 
-    webView.executeJavascript (js);
+    // Your JUCE has evaluateJavascript (not executeJavascript)
+    webView.evaluateJavascript (js);
 }
