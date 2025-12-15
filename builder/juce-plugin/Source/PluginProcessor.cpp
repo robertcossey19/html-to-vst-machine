@@ -1,140 +1,68 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-//==============================================================================
-juce::AudioProcessorValueTreeState::ParameterLayout HtmlToVstPluginAudioProcessor::createParameterLayout()
-{
-    // Add parameters here later if you need them.
-    // Example:
-    // std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    // params.push_back (std::make_unique<juce::AudioParameterFloat>("gain", "Gain", 0.0f, 1.0f, 0.5f));
-    // return { params.begin(), params.end() };
-
-    return {};
-}
-
-//==============================================================================
 HtmlToVstPluginAudioProcessor::HtmlToVstPluginAudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-    : juce::AudioProcessor (BusesProperties()
-                          #if ! JucePlugin_IsMidiEffect
-                           #if ! JucePlugin_IsSynth
-                            .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                           #endif
-                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                          #endif
-                            ),
-      apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
-#else
-    : apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
-#endif
+    : AudioProcessor (BusesProperties()
+                      .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                      .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
 }
 
 HtmlToVstPluginAudioProcessor::~HtmlToVstPluginAudioProcessor() = default;
 
-//==============================================================================
+juce::AudioProcessorValueTreeState::ParameterLayout HtmlToVstPluginAudioProcessor::createParameterLayout()
+{
+    using namespace juce;
+
+    std::vector<std::unique_ptr<RangedAudioParameter>> params;
+
+    params.push_back (std::make_unique<AudioParameterFloat>(
+        ParameterID { "gain", 1 },
+        "Gain",
+        NormalisableRange<float> (0.0f, 2.0f, 0.0001f),
+        1.0f
+    ));
+
+    return { params.begin(), params.end() };
+}
+
 const juce::String HtmlToVstPluginAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool HtmlToVstPluginAudioProcessor::acceptsMidi() const
-{
-   #if JucePlugin_WantsMidiInput
-    return true;
-   #else
-    return false;
-   #endif
-}
+bool HtmlToVstPluginAudioProcessor::acceptsMidi() const { return false; }
+bool HtmlToVstPluginAudioProcessor::producesMidi() const { return false; }
+bool HtmlToVstPluginAudioProcessor::isMidiEffect() const { return false; }
+double HtmlToVstPluginAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
-bool HtmlToVstPluginAudioProcessor::producesMidi() const
-{
-   #if JucePlugin_ProducesMidiOutput
-    return true;
-   #else
-    return false;
-   #endif
-}
+int HtmlToVstPluginAudioProcessor::getNumPrograms() { return 1; }
+int HtmlToVstPluginAudioProcessor::getCurrentProgram() { return 0; }
+void HtmlToVstPluginAudioProcessor::setCurrentProgram (int) {}
+const juce::String HtmlToVstPluginAudioProcessor::getProgramName (int) { return {}; }
+void HtmlToVstPluginAudioProcessor::changeProgramName (int, const juce::String&) {}
 
-bool HtmlToVstPluginAudioProcessor::isMidiEffect() const
-{
-   #if JucePlugin_IsMidiEffect
-    return true;
-   #else
-    return false;
-   #endif
-}
-
-double HtmlToVstPluginAudioProcessor::getTailLengthSeconds() const
-{
-    return 0.0;
-}
-
-int HtmlToVstPluginAudioProcessor::getNumPrograms()
-{
-    return 1;
-}
-
-int HtmlToVstPluginAudioProcessor::getCurrentProgram()
-{
-    return 0;
-}
-
-void HtmlToVstPluginAudioProcessor::setCurrentProgram (int index)
-{
-    juce::ignoreUnused (index);
-}
-
-const juce::String HtmlToVstPluginAudioProcessor::getProgramName (int index)
-{
-    juce::ignoreUnused (index);
-    return {};
-}
-
-void HtmlToVstPluginAudioProcessor::changeProgramName (int index, const juce::String& newName)
-{
-    juce::ignoreUnused (index, newName);
-}
-
-//==============================================================================
-void HtmlToVstPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
-{
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
-}
-
-void HtmlToVstPluginAudioProcessor::releaseResources()
-{
-}
+void HtmlToVstPluginAudioProcessor::prepareToPlay (double, int) {}
+void HtmlToVstPluginAudioProcessor::releaseResources() {}
 
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool HtmlToVstPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
-    return true;
-  #else
-    const auto mainOut = layouts.getMainOutputChannelSet();
-
-    if (mainOut != juce::AudioChannelSet::mono()
-        && mainOut != juce::AudioChannelSet::stereo())
+    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
-   #if ! JucePlugin_IsSynth
-    if (mainOut != layouts.getMainInputChannelSet())
+    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
 
     return true;
-  #endif
 }
 #endif
 
-void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                                 juce::MidiBuffer& midiMessages)
+void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused (midiMessages);
 
     const auto totalNumInputChannels  = getTotalNumInputChannels();
     const auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -142,61 +70,43 @@ void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buff
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // Passthrough (no DSP yet)
+    const float gain = *apvts.getRawParameterValue ("gain");
+
+    for (int ch = 0; ch < totalNumInputChannels; ++ch)
+        buffer.applyGain (ch, 0, buffer.getNumSamples(), gain);
 }
 
-void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer,
-                                                 juce::MidiBuffer& midiMessages)
-{
-    juce::ScopedNoDenormals noDenormals;
-    juce::ignoreUnused (midiMessages);
-
-    const auto totalNumInputChannels  = getTotalNumInputChannels();
-    const auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // Passthrough (no DSP yet)
-}
-
-//==============================================================================
-bool HtmlToVstPluginAudioProcessor::hasEditor() const
-{
-    return true;
-}
+bool HtmlToVstPluginAudioProcessor::hasEditor() const { return true; }
 
 juce::AudioProcessorEditor* HtmlToVstPluginAudioProcessor::createEditor()
 {
     return new HtmlToVstPluginAudioProcessorEditor (*this);
 }
 
-//==============================================================================
 void HtmlToVstPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // IMPORTANT FIX:
-    // In your JUCE version, these helpers are NOT in the juce:: namespace.
-    // They are available via AudioProcessor, so call them unqualified here.
     auto state = apvts.copyState();
-
-    if (auto xml = state.createXml())
-        copyXmlToBinary (*xml, destData);
+    std::unique_ptr<juce::XmlElement> xml (state.createXml());
+    copyXmlToBinary (*xml, destData);
 }
 
 void HtmlToVstPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // IMPORTANT FIX:
-    // Call getXmlFromBinary unqualified (AudioProcessor helper).
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-    {
+    std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
+    if (xml != nullptr)
         if (xml->hasTagName (apvts.state.getType()))
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
-    }
 }
 
-//==============================================================================
-// This creates new instances of the plugin
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+void HtmlToVstPluginAudioProcessor::setParamNormalized (const juce::String& paramID, float normalized01)
 {
-    return new HtmlToVstPluginAudioProcessor();
+    if (auto* p = apvts.getParameter (paramID))
+        p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, normalized01));
+}
+
+float HtmlToVstPluginAudioProcessor::getParamNormalized (const juce::String& paramID) const
+{
+    if (auto* p = apvts.getParameter (paramID))
+        return p->getValue();
+    return 0.0f;
 }
