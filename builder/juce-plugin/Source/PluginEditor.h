@@ -11,10 +11,21 @@ public:
     void resized() override;
 
 private:
-    // IMPORTANT: don't name this "processor" because AudioProcessorEditor already has a member called processor
-    HtmlToVstPluginAudioProcessor& audioProcessor;
+    HtmlToVstPluginAudioProcessor& processor;
 
-    juce::WebBrowserComponent webView;
+    // WebView with URL interception bridge
+    class UiWebView : public juce::WebBrowserComponent
+    {
+    public:
+        explicit UiWebView (HtmlToVstPluginAudioProcessor& p) : processor (p) {}
+        bool pageAboutToLoad (const juce::String& newURL) override;
+
+    private:
+        HtmlToVstPluginAudioProcessor& processor;
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (UiWebView)
+    };
+
+    UiWebView webView;
 
     juce::File tempHtmlFile;
     bool uiLoaded = false;
