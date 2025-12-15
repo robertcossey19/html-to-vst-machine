@@ -1,48 +1,46 @@
+/*
+  ==============================================================================
+
+    PluginProcessor.cpp
+
+  ==============================================================================
+*/
+
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
 namespace
 {
-    static float parseBoolishTo01 (juce::String s)
+    static float parseBoolishTo01 (const juce::String& s, float fallback = 0.0f)
     {
-        s = s.trim().toLowerCase();
-        if (s == "1" || s == "true" || s == "yes" || s == "on")  return 1.0f;
-        if (s == "0" || s == "false" || s == "no"  || s == "off") return 0.0f;
-        return s.getFloatValue();
+        auto t = s.trim().toLowerCase();
+
+        if (t == "1" || t == "true" || t == "yes" || t == "on")
+            return 1.0f;
+
+        if (t == "0" || t == "false" || t == "no" || t == "off")
+            return 0.0f;
+
+        return fallback;
     }
 
-    static juce::String canonicalParamId (juce::String id)
+    // StringMap does NOT exist in your JUCE.
+    // StringPairArray DOES exist across JUCE versions.
+    static juce::StringPairArray parseQuery (const juce::String& query)
     {
-        id = id.trim();
-        if (id.isEmpty()) return {};
+        juce::StringPairArray out;
 
-        auto lower = id.toLowerCase();
+        auto q = query;
+        if (q.startsWithChar ('?'))
+            q = q.substring (1);
 
-        if (lower == "input" || lower == "ingain" || lower == "inputgain" || lower == "inputgaindb")
-            return "inputGainDb";
-
-        if (lower == "output" || lower == "outgain" || lower == "outputgain" || lower == "outputgaindb")
-            return "outputGainDb";
-
-        if (lower == "xfmr" || lower == "transformer" || lower == "transformeron" || lower == "transform")
-            return "transformerOn";
-
-        return id;
-    }
-
-    static juce::StringMap<juce::String> parseQuery (const juce::String& query)
-    {
-        juce::StringMap<juce::String> out;
-
-        juce::String q = query;
-        if (q.startsWithChar ('?')) q = q.substring (1);
-
-        juce::StringArray parts;
-        parts.addTokens (q, "&", "");
-        for (auto& p : parts)
+        for (auto part : juce::StringArray::fromTokens (q, "&", ""))
         {
-            auto key = p.upToFirstOccurrenceOf ("=", false, false);
-            auto val = p.fromFirstOccurrenceOf ("=", false, false);
+            if (part.isEmpty())
+                continue;
+
+            auto key = part.upToFirstOccurrenceOf ("=", false, false);
+            auto val = part.fromFirstOccurrenceOf ("=", false, false);
 
             key = juce::URL::removeEscapeChars (key);
             val = juce::URL::removeEscapeChars (val);
@@ -53,32 +51,22 @@ namespace
 
         return out;
     }
-
-    static void setParamById (juce::AudioProcessorValueTreeState& apvts, const juce::String& id, float realValue)
-    {
-        if (auto* p = apvts.getParameter (id))
-        {
-            auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p);
-            if (ranged != nullptr)
-            {
-                const float norm = ranged->convertTo0to1 (realValue);
-                p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, norm));
-            }
-        }
-    }
 }
 
 HtmlToVstPluginAudioProcessor::HtmlToVstPluginAudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-    : AudioProcessor (BusesProperties()
-        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-        .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
-#endif
-    , apvts (*this, nullptr, "PARAMS", createParameterLayout())
+    : AudioProcessor (BusesProperties().withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      parameters (*this, nullptr, juce::Identifier ("params"), createParameterLayout())
 {
+    parameters.addParameterListener ("gain", this);
+    parameters.addParameterListener ("bypass", this);
 }
 
-HtmlToVstPluginAudioProcessor::~HtmlToVstPluginAudioProcessor() = default;
+HtmlToVstPluginAudioProcessor::~HtmlToVstPluginAudioProcessor()
+{
+    parameters.removeParameterListener ("gain", this);
+    parameters.removeParameterListener ("bypass", this);
+}
 
 const juce::String HtmlToVstPluginAudioProcessor::getName() const
 {
@@ -117,115 +105,76 @@ double HtmlToVstPluginAudioProcessor::getTailLengthSeconds() const
     return 0.0;
 }
 
-int HtmlToVstPluginAudioProcessor::getNumPrograms() { return 1; }
-int HtmlToVstPluginAudioProcessor::getCurrentProgram() { return 0; }
-void HtmlToVstPluginAudioProcessor::setCurrentProgram (int) {}
-const juce::String HtmlToVstPluginAudioProcessor::getProgramName (int) { return {}; }
-void HtmlToVstPluginAudioProcessor::changeProgramName (int, const juce::String&) {}
+int HtmlToVstPluginAudioProcessor::getNumPrograms()
+{
+    return 1;
+}
+
+int HtmlToVstPluginAudioProcessor::getCurrentProgram()
+{
+    return 0;
+}
+
+void HtmlToVstPluginAudioProcessor::setCurrentProgram (int)
+{
+}
+
+const juce::String HtmlToVstPluginAudioProcessor::getProgramName (int)
+{
+    return {};
+}
+
+void HtmlToVstPluginAudioProcessor::changeProgramName (int, const juce::String&)
+{
+}
 
 void HtmlToVstPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::dsp::ProcessSpec spec;
-    spec.sampleRate = sampleRate;
-    spec.maximumBlockSize = (juce::uint32) samplesPerBlock;
-    spec.numChannels = (juce::uint32) juce::jmax (1, getTotalNumOutputChannels());
-
-    inGain.prepare (spec);
-    outGain.prepare (spec);
-
-    inGain.setRampDurationSeconds (0.02);
-    outGain.setRampDurationSeconds (0.02);
-
-    updateDspFromParams();
+    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    outputMeterL = 0.0f;
+    outputMeterR = 0.0f;
 }
 
 void HtmlToVstPluginAudioProcessor::releaseResources()
 {
 }
 
-#ifndef JucePlugin_PreferredChannelConfigurations
 bool HtmlToVstPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+    if (layouts.getMainInputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
     return true;
 }
-#endif
 
-void HtmlToVstPluginAudioProcessor::updateDspFromParams()
+void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    const float inDb  = apvts.getRawParameterValue ("inputGainDb")->load();
-    const float outDb = apvts.getRawParameterValue ("outputGainDb")->load();
-    transformerOn      = apvts.getRawParameterValue ("transformerOn")->load() >= 0.5f;
-
-    inGain.setGainDecibels (inDb);
-    outGain.setGainDecibels (outDb);
-}
-
-void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
-{
-    juce::ignoreUnused (midi);
-
     juce::ScopedNoDenormals noDenormals;
 
-    const int totalNumInputChannels  = getTotalNumInputChannels();
-    const int totalNumOutputChannels = getTotalNumOutputChannels();
+    auto* gainParam   = parameters.getRawParameterValue ("gain");
+    auto* bypassParam = parameters.getRawParameterValue ("bypass");
 
-    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+    const float gain   = gainParam != nullptr ? gainParam->load() : 1.0f;
+    const bool bypass  = bypassParam != nullptr ? (bypassParam->load() > 0.5f) : false;
 
-    updateDspFromParams();
+    if (! bypass)
+        buffer.applyGain (gain);
 
-    // in gain
-    {
-        juce::dsp::AudioBlock<float> block (buffer);
-        juce::dsp::ProcessContextReplacing<float> ctx (block);
-        inGain.process (ctx);
-    }
-
-    // simple "transformer" saturation (no captured lambdas, no JUCE internals)
-    if (transformerOn)
-    {
-        const float drive = 2.2f;
-        const float norm  = 1.0f / std::tanh (drive);
-
-        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        {
-            auto* d = buffer.getWritePointer (ch);
-            for (int n = 0; n < buffer.getNumSamples(); ++n)
-            {
-                const float x = d[n];
-                d[n] = std::tanh (x * drive) * norm;
-            }
-        }
-    }
-
-    // out gain
-    {
-        juce::dsp::AudioBlock<float> block (buffer);
-        juce::dsp::ProcessContextReplacing<float> ctx (block);
-        outGain.process (ctx);
-    }
-
-    // meters (peak, with gentle release)
+    // crude peak meters (smoothed)
     const float peakL = buffer.getNumChannels() > 0 ? buffer.getMagnitude (0, 0, buffer.getNumSamples()) : 0.0f;
     const float peakR = buffer.getNumChannels() > 1 ? buffer.getMagnitude (1, 0, buffer.getNumSamples()) : peakL;
 
-    const float release = 0.90f;
-
-    const float prevL = meterL.load (std::memory_order_relaxed);
-    const float prevR = meterR.load (std::memory_order_relaxed);
-
-    meterL.store (juce::jmax (peakL, prevL * release), std::memory_order_relaxed);
-    meterR.store (juce::jmax (peakR, prevR * release), std::memory_order_relaxed);
+    outputMeterL = 0.95f * outputMeterL + 0.05f * peakL;
+    outputMeterR = 0.95f * outputMeterR + 0.05f * peakR;
 }
 
-bool HtmlToVstPluginAudioProcessor::hasEditor() const { return true; }
+bool HtmlToVstPluginAudioProcessor::hasEditor() const
+{
+    return true;
+}
 
 juce::AudioProcessorEditor* HtmlToVstPluginAudioProcessor::createEditor()
 {
@@ -234,7 +183,7 @@ juce::AudioProcessorEditor* HtmlToVstPluginAudioProcessor::createEditor()
 
 void HtmlToVstPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    auto state = apvts.copyState();
+    auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
 }
@@ -242,73 +191,70 @@ void HtmlToVstPluginAudioProcessor::getStateInformation (juce::MemoryBlock& dest
 void HtmlToVstPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
-    if (xml && xml->hasTagName (apvts.state.getType()))
-        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+
+    if (xml != nullptr)
+        if (xml->hasTagName (parameters.state.getType()))
+            parameters.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout HtmlToVstPluginAudioProcessor::createParameterLayout()
 {
-    using APF = juce::AudioParameterFloat;
-    using APB = juce::AudioParameterBool;
-
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    params.push_back (std::make_unique<APF> (
-        "inputGainDb", "Input Gain (dB)",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f),
-        0.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "gain", "Gain",
+        juce::NormalisableRange<float> (0.0f, 2.0f, 0.001f),
+        1.0f
+    ));
 
-    params.push_back (std::make_unique<APF> (
-        "outputGainDb", "Output Gain (dB)",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f),
-        0.0f));
-
-    params.push_back (std::make_unique<APB> (
-        "transformerOn", "Transformer",
-        true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        "bypass", "Bypass",
+        false
+    ));
 
     return { params.begin(), params.end() };
 }
 
-void HtmlToVstPluginAudioProcessor::handleUiMessageUrl (const juce::String& url)
+void HtmlToVstPluginAudioProcessor::parameterChanged (const juce::String&, float)
 {
-    // Accept patterns like:
-    //   juce:set?param=inputGainDb&value=-6
-    //   juce://inputGainDb?value=-6
-    //   juce://set?name=transformer&value=0
-    juce::String s = url.trim();
-
-    if (s.startsWithIgnoreCase ("juce:"))
-        s = s.fromFirstOccurrenceOf ("juce:", false, false);
-
-    if (s.startsWith ("//"))
-        s = s.substring (2);
-
-    const auto head  = s.upToFirstOccurrenceOf ("?", false, false);
-    const auto query = s.fromFirstOccurrenceOf ("?", false, false);
-
-    const auto map = parseQuery (query);
-
-    juce::String param = map.getWithDefault ("param", {});
-    if (param.isEmpty()) param = map.getWithDefault ("name", {});
-    if (param.isEmpty()) param = map.getWithDefault ("id", {});
-    if (param.isEmpty()) param = head; // e.g. juce://inputGainDb?value=...
-
-    param = canonicalParamId (param);
-    if (param.isEmpty())
-        return;
-
-    juce::String valueStr = map.getWithDefault ("value", {});
-    if (valueStr.isEmpty()) valueStr = map.getWithDefault ("v", {});
-    if (valueStr.isEmpty())
-        return;
-
-    const float v = parseBoolishTo01 (valueStr);
-
-    setParamById (apvts, param, v);
+    // (optional) push parameter changes to UI later if desired
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+float HtmlToVstPluginAudioProcessor::getOutputMeterL() const { return outputMeterL; }
+float HtmlToVstPluginAudioProcessor::getOutputMeterR() const { return outputMeterR; }
+
+void HtmlToVstPluginAudioProcessor::setParamById (const juce::String& paramId, float value01)
 {
-    return new HtmlToVstPluginAudioProcessor();
+    if (auto* p = parameters.getParameter (paramId))
+        p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, value01));
+}
+
+void HtmlToVstPluginAudioProcessor::handleUiMessageUrl (const juce::String& rawUrl)
+{
+    auto url = rawUrl.trim();
+
+    // Expected forms:
+    // juce://set?param=gain&value=0.7
+    // juce://set?param=bypass&value=true
+
+    auto qPos = url.indexOfChar ('?');
+    auto query = (qPos >= 0) ? url.substring (qPos + 1) : juce::String();
+
+    auto map = parseQuery (query);
+
+    const auto action = map.getValue ("action", map.getValue ("a", "")).trim().toLowerCase();
+
+    if (action == "set" || url.containsIgnoreCase ("://set"))
+    {
+        const auto param = map.getValue ("param", map.getValue ("p", "")).trim();
+        const auto val   = map.getValue ("value", map.getValue ("v", "")).trim();
+
+        if (param.isNotEmpty())
+        {
+            if (param == "bypass")
+                setParamById (param, parseBoolishTo01 (val, 0.0f));
+            else
+                setParamById (param, (float) val.getDoubleValue());
+        }
+    }
 }
