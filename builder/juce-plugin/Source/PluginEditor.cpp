@@ -23,7 +23,7 @@ static String trimStartFast (String s)
 
 HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor& p)
     : AudioProcessorEditor (&p),
-      processor (p),
+      audioProcessor (p),
       webView (p)
 {
     setOpaque (true);
@@ -135,9 +135,46 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 </html>)HTML";
 }
 
+// ✅ JUCE-version-safe query parsing (no URL::getParameterValue needed)
+String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl, const String& key)
+{
+    // Find '?'
+    auto qPos = fullUrl.indexOfChar ('?');
+    if (qPos < 0)
+        return {};
+
+    auto query = fullUrl.substring (qPos + 1);
+
+    // Trim fragment if present
+    auto hashPos = query.indexOfChar ('#');
+    if (hashPos >= 0)
+        query = query.substring (0, hashPos);
+
+    // Split key=value pairs
+    StringArray pairs;
+    pairs.addTokens (query, "&", "");
+    pairs.trim();
+    pairs.removeEmptyStrings();
+
+    for (auto& p : pairs)
+    {
+        auto eq = p.indexOfChar ('=');
+        String k = (eq >= 0) ? p.substring (0, eq) : p;
+        String v = (eq >= 0) ? p.substring (eq + 1) : "";
+
+        // URL decode both sides
+        k = urlDecodeToString (k);
+        v = urlDecodeToString (v);
+
+        if (k == key)
+            return v;
+    }
+
+    return {};
+}
+
 static String injectJuceBridge (String html)
 {
-    // Adds a tiny helper so your UI can call JUCE.setParam("gain", 0..1)
     const String bridge = R"BRIDGE(
 <script>
   window.JUCE = window.JUCE || {};
@@ -147,15 +184,9 @@ static String injectJuceBridge (String html)
       window.location.href = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(v);
     } catch (e) {}
   };
-  window.JUCE.getParam = function(param) {
-    try {
-      window.location.href = "juce://get?param=" + encodeURIComponent(param);
-    } catch (e) {}
-  };
 </script>
 )BRIDGE";
 
-    // Inject before </body> if possible, else append.
     auto lower = html.toLowerCase();
     auto idx = lower.lastIndexOf ("</body>");
     if (idx >= 0)
@@ -257,39 +288,33 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 
 // ============================================================
 // UI <-> DSP BRIDGE
-// ============================================================
 // Supported:
-//   juce://set?param=gain&value=0.5          (value is normalized 0..1)
-//   juce://get?param=gain                    (currently no callback; UI-driven control works)
+//   juce://set?param=gain&value=0.5     (value is normalized 0..1)
 // ============================================================
 bool HtmlToVstPluginAudioProcessorEditor::UiWebView::pageAboutToLoad (const String& newURL)
 {
-    // Let normal pages load
     if (! newURL.startsWithIgnoreCase ("juce://"))
         return true;
 
-    URL u (newURL);
-    auto host = u.getDomain().toLowerCase(); // "set" or "get"
-    auto param = u.getParameterValue ("param");
-    auto valueStr = u.getParameterValue ("value");
+    // For juce://set?param=...&value=...
+    // We parse manually so it works across JUCE versions
+    auto hostStart = String ("juce://").length();
+    auto hostEnd = newURL.indexOfChar ('?');
+    String host = (hostEnd > hostStart) ? newURL.substring (hostStart, hostEnd).toLowerCase()
+                                        : newURL.substring (hostStart).toLowerCase();
 
     if (host == "set")
     {
+        auto param = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "param");
+        auto valueStr = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "value");
+
         float v01 = (float) valueStr.getDoubleValue();
         v01 = jlimit (0.0f, 1.0f, v01);
 
         if (param.isNotEmpty())
-            processor.setParamNormalized (param, v01);
+            audioProcessor.setParamNormalized (param, v01);
 
-        return false; // consume
-    }
-
-    if (host == "get")
-    {
-        // UI-driven control is the main goal here.
-        // If you want plugin->UI, tell me your JS callback name and I’ll add it.
-        (void) param;
-        return false; // consume
+        return false;
     }
 
     return false;
