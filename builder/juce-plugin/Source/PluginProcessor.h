@@ -2,7 +2,6 @@
 
 #include <JuceHeader.h>
 
-//==============================================================================
 class HtmlToVstPluginAudioProcessor  : public juce::AudioProcessor
 {
 public:
@@ -18,7 +17,6 @@ public:
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -43,8 +41,12 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // Keep this even if empty for now — it makes state save/restore easy later.
+    //==============================================================================
     juce::AudioProcessorValueTreeState apvts;
+
+    // Convenience getters (UI bridge will call these)
+    void setParamNormalized (const juce::String& paramID, float normalized01);
+    float getParamNormalized (const juce::String& paramID) const;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
