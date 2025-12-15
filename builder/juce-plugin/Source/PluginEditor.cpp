@@ -1,6 +1,5 @@
 #include "PluginEditor.h"
 
-// Try both include styles depending on how CMake/JUCE exposes BinaryData.h
 #if __has_include("BinaryData.h")
   #include "BinaryData.h"
 #elif __has_include(<BinaryData.h>)
@@ -24,20 +23,18 @@ static String trimStartFast (String s)
 
 HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor& p)
     : AudioProcessorEditor (&p),
-      audioProcessor (p)
+      processor (p),
+      webView (p)
 {
     setOpaque (true);
     addAndMakeVisible (webView);
 
-    // reasonable default size
     setSize (1100, 640);
-
     loadUiFromBinaryData();
 }
 
 HtmlToVstPluginAudioProcessorEditor::~HtmlToVstPluginAudioProcessorEditor()
 {
-    // Best effort cleanup
     if (tempHtmlFile.existsAsFile())
         tempHtmlFile.deleteFile();
 }
@@ -61,12 +58,7 @@ String HtmlToVstPluginAudioProcessorEditor::urlDecodeToString (const String& s)
     {
         const auto ch = s[i];
 
-        if (ch == '+')
-        {
-            out += ' ';
-            ++i;
-            continue;
-        }
+        if (ch == '+') { out += ' '; ++i; continue; }
 
         if (ch == '%' && i + 2 < s.length())
         {
@@ -104,11 +96,9 @@ bool HtmlToVstPluginAudioProcessorEditor::looksLikeHtml (const String& s)
 {
     auto t = trimStartFast (s);
 
-    // raw html
     if (t.startsWithChar ('<') && (t.containsIgnoreCase ("<html") || t.containsIgnoreCase ("<!doctype")))
         return true;
 
-    // url-encoded html typically starts with %3C or %0A%3C
     if (t.startsWithIgnoreCase ("%3c") || t.containsIgnoreCase ("%3chtml") || t.containsIgnoreCase ("%3c%21doctype"))
         return true;
 
@@ -145,33 +135,61 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 </html>)HTML";
 }
 
-void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& html)
+static String injectJuceBridge (String html)
 {
-    // Unique per instance so multiple plugin windows don’t fight over the file
+    // Adds a tiny helper so your UI can call JUCE.setParam("gain", 0..1)
+    const String bridge = R"BRIDGE(
+<script>
+  window.JUCE = window.JUCE || {};
+  window.JUCE.setParam = function(param, value01) {
+    try {
+      var v = Math.max(0, Math.min(1, Number(value01)));
+      window.location.href = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(v);
+    } catch (e) {}
+  };
+  window.JUCE.getParam = function(param) {
+    try {
+      window.location.href = "juce://get?param=" + encodeURIComponent(param);
+    } catch (e) {}
+  };
+</script>
+)BRIDGE";
+
+    // Inject before </body> if possible, else append.
+    auto lower = html.toLowerCase();
+    auto idx = lower.lastIndexOf ("</body>");
+    if (idx >= 0)
+        html = html.substring (0, idx) + bridge + html.substring (idx);
+    else
+        html += bridge;
+
+    return html;
+}
+
+void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& inHtml)
+{
     const auto fileName = "HtmlToVstUI_" + String::toHexString ((pointer_sized_int) this) + ".html";
     tempHtmlFile = File::getSpecialLocation (File::tempDirectory).getChildFile (fileName);
 
-    {
-        FileOutputStream out (tempHtmlFile);
-        if (! out.openedOk())
-        {
-            const auto msg = "Failed to open temp file for UI:\n" + tempHtmlFile.getFullPathName();
-            const auto fallback = makeMissingUiHtml (msg);
+    auto html = injectJuceBridge (inHtml);
 
-            FileOutputStream out2 (tempHtmlFile);
-            if (out2.openedOk())
-            {
-                out2.writeText (fallback, false, false, "\n");
-                out2.flush();
-            }
-        }
-        else
+    FileOutputStream out (tempHtmlFile);
+    if (! out.openedOk())
+    {
+        const auto msg = "Failed to open temp file for UI:\n" + tempHtmlFile.getFullPathName();
+        FileOutputStream out2 (tempHtmlFile);
+        if (out2.openedOk())
         {
-            out.setPosition (0);
-            out.truncate();
-            out.writeText (html, false, false, "\n");
-            out.flush();
+            out2.writeText (makeMissingUiHtml (msg), false, false, "\n");
+            out2.flush();
         }
+    }
+    else
+    {
+        out.setPosition (0);
+        out.truncate();
+        out.writeText (html, false, false, "\n");
+        out.flush();
     }
 
     auto u = URL (tempHtmlFile).withParameter ("t", String (Time::getMillisecondCounter()));
@@ -197,7 +215,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
             if (! looksLikeHtml (text))
                 return false;
 
-            // Decode URL-encoded HTML if needed
             auto t = trimStartFast (text);
             if (t.startsWithChar ('%') || t.containsIgnoreCase ("%3c"))
                 text = urlDecodeToString (text);
@@ -211,7 +228,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         return false;
     };
 
-    // Pass 1: prioritize anything with “html” in the resource name
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -223,7 +239,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         }
     }
 
-    // Pass 2: brute force everything
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -238,4 +253,44 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 #else
     writeHtmlToTempAndLoad (makeMissingUiHtml ("JUCE_TARGET_HAS_BINARY_DATA is disabled."));
 #endif
+}
+
+// ============================================================
+// UI <-> DSP BRIDGE
+// ============================================================
+// Supported:
+//   juce://set?param=gain&value=0.5          (value is normalized 0..1)
+//   juce://get?param=gain                    (currently no callback; UI-driven control works)
+// ============================================================
+bool HtmlToVstPluginAudioProcessorEditor::UiWebView::pageAboutToLoad (const String& newURL)
+{
+    // Let normal pages load
+    if (! newURL.startsWithIgnoreCase ("juce://"))
+        return true;
+
+    URL u (newURL);
+    auto host = u.getDomain().toLowerCase(); // "set" or "get"
+    auto param = u.getParameterValue ("param");
+    auto valueStr = u.getParameterValue ("value");
+
+    if (host == "set")
+    {
+        float v01 = (float) valueStr.getDoubleValue();
+        v01 = jlimit (0.0f, 1.0f, v01);
+
+        if (param.isNotEmpty())
+            processor.setParamNormalized (param, v01);
+
+        return false; // consume
+    }
+
+    if (host == "get")
+    {
+        // UI-driven control is the main goal here.
+        // If you want plugin->UI, tell me your JS callback name and I’ll add it.
+        (void) param;
+        return false; // consume
+    }
+
+    return false;
 }
