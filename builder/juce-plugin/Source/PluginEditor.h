@@ -4,22 +4,20 @@
 
 class HtmlToVstPluginAudioProcessor;
 
-class HtmlToVstPluginAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                                  private juce::Timer
+class HtmlToVstPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
-    ~HtmlToVstPluginAudioProcessorEditor() override = default;
+    ~HtmlToVstPluginAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    void timerCallback() override;
-
     HtmlToVstPluginAudioProcessor& audioProcessor;
 
-    juce::WebBrowserComponent web;
+    // If you want to disable navigation/network, set options as needed.
+    juce::WebBrowserComponent browser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
