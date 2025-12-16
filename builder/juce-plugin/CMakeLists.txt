@@ -5,9 +5,10 @@ project(HtmlToVstPlugin VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# JUCE lives inside builder/juce-plugin/JUCE in your repo
 add_subdirectory(JUCE)
 
-# ---- UI path (THIS is the only place you “configure” UI now) ----
+# ---- UI FILE WE EMBED INTO BinaryData ----
 set(UI_HTML "${CMAKE_CURRENT_LIST_DIR}/Assets/UI/ampex_ui.html")
 
 if (NOT EXISTS "${UI_HTML}")
@@ -32,7 +33,11 @@ juce_add_plugin(HtmlToVstPlugin
     FORMATS VST3
 )
 
-# BinaryData target that embeds the UI
+# ✅ THIS IS WHAT YOUR BUILD IS MISSING RIGHT NOW:
+# It generates HtmlToVstPlugin_artefacts/JuceLibraryCode/JuceHeader.h
+juce_generate_juce_header(HtmlToVstPlugin)
+
+# BinaryData target that embeds the UI HTML
 juce_add_binary_data(HtmlUIData SOURCES "${UI_HTML}")
 
 target_sources(HtmlToVstPlugin PRIVATE
