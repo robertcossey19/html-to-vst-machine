@@ -1,4 +1,7 @@
+// builder/juce-plugin/Source/PluginEditor.h
 #pragma once
+
+#include <JuceHeader.h>
 #include "PluginProcessor.h"
 
 class HtmlToVstPluginAudioProcessorEditor : public juce::AudioProcessorEditor
@@ -11,9 +14,8 @@ public:
     void resized() override;
 
 private:
-    HtmlToVstPluginAudioProcessor& audioProcessor; // renamed to avoid shadow warning
+    HtmlToVstPluginAudioProcessor& audioProcessor;
 
-    // WebView with URL interception bridge
     class UiWebView : public juce::WebBrowserComponent
     {
     public:
@@ -34,9 +36,8 @@ private:
     static bool looksLikeHtml (const juce::String& s);
     static juce::String makeMissingUiHtml (const juce::String& extra);
 
-    // ✅ JUCE-version-safe query parsing (replaces URL::getParameterValue)
-    static juce::String getQueryParam (const juce::String& fullUrl,
-                                       const juce::String& key);
+    // JUCE-version-safe query parsing
+    static juce::String getQueryParam (const juce::String& fullUrl, const juce::String& key);
 
     void writeHtmlToTempAndLoad (const juce::String& html);
     void loadUiFromBinaryData();
