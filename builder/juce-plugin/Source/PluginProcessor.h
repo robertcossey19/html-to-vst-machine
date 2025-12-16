@@ -1,9 +1,8 @@
-// builder/juce-plugin/Source/PluginProcessor.h
 #pragma once
 
 #include <JuceHeader.h>
 
-class HtmlToVstPluginAudioProcessor : public juce::AudioProcessor
+class HtmlToVstPluginAudioProcessor  : public juce::AudioProcessor
 {
 public:
     HtmlToVstPluginAudioProcessor();
@@ -43,14 +42,14 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    juce::AudioProcessorValueTreeState apvts;
-
-    // UI bridge helpers
+    // UI <-> DSP bridge helpers
     void setParamNormalized (const juce::String& paramID, float normalized01);
     float getParamNormalized (const juce::String& paramID) const;
 
-private:
+    juce::AudioProcessorValueTreeState apvts;
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessor)
 };
