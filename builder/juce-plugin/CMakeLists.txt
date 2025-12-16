@@ -13,9 +13,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(juce)
 
-# -------------------------
-# UI (repo-root/ui/index.html). If missing, generate fallback.
-# -------------------------
 set(UI_DIR "${CMAKE_CURRENT_LIST_DIR}/../../ui")
 set(UI_ENTRY "${UI_DIR}/index.html")
 
@@ -27,9 +24,6 @@ endif()
 
 juce_add_binary_data(HtmlUIData SOURCES "${UI_ENTRY}")
 
-# -------------------------
-# Plugin target
-# -------------------------
 juce_add_plugin(HtmlToVstPlugin
   COMPANY_NAME "AnalogExact"
   BUNDLE_ID "com.analogexact.htmltovst"
@@ -47,7 +41,6 @@ juce_add_plugin(HtmlToVstPlugin
 target_sources(HtmlToVstPlugin PRIVATE
   Source/PluginProcessor.cpp
   Source/PluginEditor.cpp
-  Source/PluginEntry.cpp
 )
 
 target_link_libraries(HtmlToVstPlugin
@@ -74,7 +67,6 @@ target_link_libraries(HtmlToVstPlugin
     juce::juce_recommended_warning_flags
 )
 
-# BinaryData include dir
 target_include_directories(HtmlToVstPlugin PRIVATE
   "${CMAKE_CURRENT_BINARY_DIR}/juce_binarydata_HtmlUIData/JuceLibraryCode"
 )
