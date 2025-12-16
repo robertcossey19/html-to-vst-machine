@@ -113,7 +113,8 @@ void HtmlToVstPluginAudioProcessorEditor::timerCallback()
        << "  var ot=document.getElementById('meterOutDb'); if(ot) ot.textContent=(" << outDb << ").toFixed(1)+' dB';"
        << "} catch(e) {}";
 
-    webView.executeJavascript (js);
+    // JUCE version uses evaluateJavascript()
+    webView.evaluateJavascript (js);
 }
 
 //==============================================================================
@@ -210,7 +211,7 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 }
 
 //==============================================================================
-// Query param parser that works regardless of JUCE URL API differences
+// Query param parser
 String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& url, const String& key)
 {
     const auto qPos = url.indexOfChar ('?');
@@ -319,9 +320,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 // Bridge: JS -> C++ via juce://set?param=ID&value=0..1
 void HtmlToVstPluginAudioProcessorEditor::handleJuceUrl (const String& urlString)
 {
-    // Examples:
-    // juce://set?param=inputGain&value=0.52
-    // juce://toggle?param=transformer&value=1
     const auto host = urlString.fromFirstOccurrenceOf ("juce://", false, false)
                               .upToFirstOccurrenceOf ("?", false, false)
                               .toLowerCase();
@@ -341,12 +339,6 @@ void HtmlToVstPluginAudioProcessorEditor::handleJuceUrl (const String& urlString
 // Inject a generic hook layer so “moving knobs” actually changes APVTS
 void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
 {
-    // This script:
-    // 1) defines window.juce.setParam / toggleParam
-    // 2) auto-hooks:
-    //    - elements with data-param
-    //    - common ids/names: input, output, gain, mix, drive, transformer, bypass
-    // 3) provides window.juceSetMeters(inDb,outDb) fallback if HTML wants it
     const String js = R"JS(
 (function(){
   try {
@@ -367,7 +359,6 @@ void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
     function hookEl(el, param){
       if (!el || !param) return;
 
-      var tag = (el.tagName || "").toLowerCase();
       var type = (el.type || "").toLowerCase();
 
       var send = function(){
@@ -376,7 +367,6 @@ void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
         } else {
           var v = parseFloat(el.value);
           if (!isFinite(v)) v = 0;
-          // If UI uses 0..100 or -60..+12 etc, clamp to 0..1 best-effort:
           if (v > 1.0001) v = v / 100.0;
           if (v < 0) v = 0;
           if (v > 1) v = 1;
@@ -388,12 +378,10 @@ void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
       el.addEventListener("change", send);
     }
 
-    // 1) data-param
     document.querySelectorAll("[data-param]").forEach(function(el){
       hookEl(el, el.getAttribute("data-param"));
     });
 
-    // 2) common ids/names -> canonical param IDs
     var map = {
       "input": "inputGain",
       "inputgain": "inputGain",
@@ -419,10 +407,8 @@ void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
       });
     });
 
-    // Optional: meters helper (if the HTML defines #vuIn/#vuOut, etc.)
     window.juceSetMeters = function(inDb, outDb){
       try {
-        // if the UI uses needles, it can override this function.
         var clamp = function(x){ return Math.max(-60, Math.min(12, x)); };
         var inC = clamp(inDb), outC = clamp(outDb);
 
@@ -436,7 +422,6 @@ void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
 })();
 )JS";
 
-    webView.executeJavascript (js);
+    // JUCE version uses evaluateJavascript()
+    webView.evaluateJavascript (js);
 }
-
-//==============================================================================
