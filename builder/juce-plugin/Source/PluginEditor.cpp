@@ -1,10 +1,9 @@
-// builder/juce-plugin/Source/PluginEditor.cpp
 #include "PluginEditor.h"
 
 #if __has_include("BinaryData.h")
-  #include "BinaryData.h"
+ #include "BinaryData.h"
 #elif __has_include(<BinaryData.h>)
-  #include <BinaryData.h>
+ #include <BinaryData.h>
 #endif
 
 using namespace juce;
@@ -141,17 +140,14 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 </html>)HTML";
 }
 
-// JUCE-version-safe query parsing (no URL::getParameterValue)
 String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl, const String& key)
 {
     auto qPos = fullUrl.indexOfChar ('?');
     if (qPos < 0) return {};
 
     auto query = fullUrl.substring (qPos + 1);
-
     auto hashPos = query.indexOfChar ('#');
-    if (hashPos >= 0)
-        query = query.substring (0, hashPos);
+    if (hashPos >= 0) query = query.substring (0, hashPos);
 
     StringArray pairs;
     pairs.addTokens (query, "&", "");
@@ -174,18 +170,113 @@ String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl
     return {};
 }
 
+// Inject a JS bridge that supports:
+//  - juce://set?param=gain&value=0.5
+//  - Auto-bind sliders/inputs:
+//      * data-juce-param="gain"
+//      * id/name="gain" or "mix" or common aliases like "volume", "output", "level", "drywet", etc.
 static String injectJuceBridge (String html)
 {
-    // This lets your HTML call: juce://set?param=gain&value=0.5
-    // Put this before </body> if possible.
     const String bridge = R"BRIDGE(
 <script>
 (function(){
-  function juceSet(param, value01){
-    const u = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(String(value01));
-    window.location.href = u;
+  function clamp01(x){ x = Number(x); if (!isFinite(x)) return 0; return Math.max(0, Math.min(1, x)); }
+
+  function sendSet(param, value01){
+    if (!param) return;
+    var url = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(String(clamp01(value01)));
+    // Trigger navigation for JUCE interception
+    window.location.href = url;
   }
-  window.juceSet = juceSet;
+
+  // Expose explicit API for your UI JS if you want:
+  window.__JUCE = window.__JUCE || {};
+  window.__JUCE.setParam = sendSet;
+
+  function normFromElement(el){
+    var v = el.value;
+    var min = (el.min !== undefined && el.min !== "") ? Number(el.min) : 0;
+    var max = (el.max !== undefined && el.max !== "") ? Number(el.max) : 1;
+    var step = (el.step !== undefined && el.step !== "") ? Number(el.step) : 0;
+    var x = Number(v);
+    if (!isFinite(x)) x = 0;
+
+    if (isFinite(min) && isFinite(max) && max !== min){
+      // If element already uses 0..1, keep it
+      if (min === 0 && max === 1) return clamp01(x);
+      // Otherwise map to 0..1
+      return clamp01((x - min) / (max - min));
+    }
+    return clamp01(x);
+  }
+
+  function pickParamName(el){
+    // Highest priority: explicit attribute
+    var p = el.getAttribute("data-juce-param");
+    if (p) return p;
+
+    // Next: id/name heuristics
+    var id = (el.id || "").toLowerCase();
+    var nm = (el.name || "").toLowerCase();
+    var key = id || nm;
+    if (!key) return null;
+
+    // Direct matches
+    if (key === "gain" || key === "mix" || key === "drive") return key;
+
+    // Common aliases -> real params
+    var aliases = {
+      "volume":"gain", "output":"gain", "out":"gain", "level":"gain", "trim":"gain",
+      "master":"gain", "makeup":"gain", "makeupgain":"gain",
+      "drywet":"mix", "wetdry":"mix", "blend":"mix"
+    };
+    if (aliases[key]) return aliases[key];
+
+    // Contains-based fallbacks
+    if (key.indexOf("gain") >= 0 || key.indexOf("vol") >= 0 || key.indexOf("level") >= 0) return "gain";
+    if (key.indexOf("mix") >= 0 || key.indexOf("blend") >= 0 || key.indexOf("wet") >= 0) return "mix";
+    if (key.indexOf("drive") >= 0 || key.indexOf("sat") >= 0) return "drive";
+
+    return null;
+  }
+
+  function bindElement(el){
+    var param = pickParamName(el);
+    if (!param) return;
+
+    var handler = function(){
+      var v01 = normFromElement(el);
+      sendSet(param, v01);
+    };
+
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+  }
+
+  function autoBind(){
+    var els = Array.prototype.slice.call(document.querySelectorAll("input, select"));
+    els.forEach(function(el){
+      // Only bind things that look like controls
+      var type = (el.type || "").toLowerCase();
+      var ok = (type === "range" || type === "number" || type === "checkbox" || type === "radio" || el.tagName.toLowerCase() === "select");
+      if (!ok) return;
+
+      // Checkbox -> 0/1
+      if (type === "checkbox"){
+        var p = pickParamName(el);
+        if (!p) return;
+        el.addEventListener("change", function(){
+          sendSet(p, el.checked ? 1 : 0);
+        });
+        return;
+      }
+
+      bindElement(el);
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoBind);
+  else autoBind();
 })();
 </script>
 )BRIDGE";
@@ -205,7 +296,7 @@ void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& 
     const auto fileName = "HtmlToVstUI_" + String::toHexString ((pointer_sized_int) this) + ".html";
     tempHtmlFile = File::getSpecialLocation (File::tempDirectory).getChildFile (fileName);
 
-    auto html = injectJuceBridge (inHtml);
+    const auto html = injectJuceBridge (inHtml);
 
     FileOutputStream out (tempHtmlFile);
     if (! out.openedOk())
@@ -233,7 +324,7 @@ void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& 
 
 void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 {
-   #if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
+#if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
     String debug;
     debug << "BinaryData scan:\n";
 
@@ -261,6 +352,7 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         return false;
     };
 
+    // Prefer html-ish names
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -272,6 +364,7 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         }
     }
 
+    // Fallback: brute force
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -283,9 +376,9 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
     }
 
     writeHtmlToTempAndLoad (makeMissingUiHtml (debug));
-   #else
+#else
     writeHtmlToTempAndLoad (makeMissingUiHtml ("JUCE_TARGET_HAS_BINARY_DATA is disabled."));
-   #endif
+#endif
 }
 
 // ============================================================
@@ -299,10 +392,8 @@ bool HtmlToVstPluginAudioProcessorEditor::UiWebView::pageAboutToLoad (const Stri
 
     auto hostStart = String ("juce://").length();
     auto hostEnd   = newURL.indexOfChar ('?');
-
-    String host = (hostEnd > hostStart)
-        ? newURL.substring (hostStart, hostEnd).toLowerCase()
-        : newURL.substring (hostStart).toLowerCase();
+    String host    = (hostEnd > hostStart) ? newURL.substring (hostStart, hostEnd).toLowerCase()
+                                          : newURL.substring (hostStart).toLowerCase();
 
     if (host == "set")
     {
