@@ -1,4 +1,5 @@
 #pragma once
+
 #include <JuceHeader.h>
 
 class HtmlToVstPluginAudioProcessor;
@@ -8,7 +9,7 @@ class HtmlToVstPluginAudioProcessorEditor final : public juce::AudioProcessorEdi
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
-    ~HtmlToVstPluginAudioProcessorEditor() override;
+    ~HtmlToVstPluginAudioProcessorEditor() override = default;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -19,8 +20,6 @@ private:
     HtmlToVstPluginAudioProcessor& audioProcessor;
 
     juce::WebBrowserComponent web;
-
-    void loadUiFromBinaryData();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
