@@ -1,4 +1,3 @@
-// builder/juce-plugin/Source/PluginEditor.h
 #pragma once
 
 #include <JuceHeader.h>
@@ -36,7 +35,7 @@ private:
     static bool looksLikeHtml (const juce::String& s);
     static juce::String makeMissingUiHtml (const juce::String& extra);
 
-    // JUCE-version-safe query parsing
+    // JUCE-version-safe query parsing (works even if URL::getParameterValue is missing)
     static juce::String getQueryParam (const juce::String& fullUrl, const juce::String& key);
 
     void writeHtmlToTempAndLoad (const juce::String& html);
