@@ -3,9 +3,8 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class HtmlToVstPluginAudioProcessorEditor final
-    : public juce::AudioProcessorEditor
-    , private juce::Timer
+class HtmlToVstPluginAudioProcessorEditor final : public juce::AudioProcessorEditor,
+                                                  private juce::Timer
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
@@ -15,33 +14,30 @@ public:
     void resized() override;
 
 private:
-    HtmlToVstPluginAudioProcessor& processor;
-
-    // Web view subclass to intercept juce://set?param=...&value=...
+    // Small wrapper so we can safely call evaluateJavascript everywhere
     class Browser final : public juce::WebBrowserComponent
     {
     public:
-        explicit Browser (HtmlToVstPluginAudioProcessorEditor& ownerEditor);
+        using juce::WebBrowserComponent::WebBrowserComponent;
 
-        bool pageAboutToLoad (const juce::String& newURL) override;
-
-        // JUCE uses evaluateJavascript in this version
         void runJS (const juce::String& js)
         {
-            evaluateJavascript (js);
+            // JUCE uses evaluateJavascript (executeJavascript doesn't exist in JUCE 7)
+            evaluateJavascript (js, nullptr);
         }
-
-    private:
-        HtmlToVstPluginAudioProcessorEditor& owner;
     };
+
+    void timerCallback() override;
+
+    // Loads BinaryData index.html -> temp file -> file:// url
+    void loadUiFromBinaryData();
+
+    HtmlToVstPluginAudioProcessor& audioProcessor;
 
     Browser webView;
 
-    juce::String makeUiDataUrl();
-    void injectBridgeJS();
-    void handleJuceUrl (const juce::String& url);
-
-    void timerCallback() override;
+    juce::File uiTempHtmlFile;
+    bool uiLoaded = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
