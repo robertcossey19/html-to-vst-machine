@@ -14,7 +14,6 @@ public:
     void resized() override;
 
 private:
-    // Small wrapper so we can safely call evaluateJavascript everywhere
     class Browser final : public juce::WebBrowserComponent
     {
     public:
@@ -22,14 +21,11 @@ private:
 
         void runJS (const juce::String& js)
         {
-            // JUCE uses evaluateJavascript (executeJavascript doesn't exist in JUCE 7)
             evaluateJavascript (js, nullptr);
         }
     };
 
     void timerCallback() override;
-
-    // Loads BinaryData index.html -> temp file -> file:// url
     void loadUiFromBinaryData();
 
     HtmlToVstPluginAudioProcessor& audioProcessor;
