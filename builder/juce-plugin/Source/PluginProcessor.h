@@ -1,7 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
 
 class HtmlToVstPluginAudioProcessor final : public juce::AudioProcessor
 {
@@ -48,6 +48,7 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    // Simple “drive” DSP chain (input gain -> waveshaper -> output gain)
     juce::dsp::Gain<float> inGain, outGain;
     juce::dsp::WaveShaper<float> driveShaper;
 
