@@ -1,3 +1,4 @@
+// builder/juce-plugin/Source/PluginEditor.cpp
 #include "PluginEditor.h"
 
 #if __has_include("BinaryData.h")
@@ -58,7 +59,12 @@ String HtmlToVstPluginAudioProcessorEditor::urlDecodeToString (const String& s)
     {
         const auto ch = s[i];
 
-        if (ch == '+') { out += ' '; ++i; continue; }
+        if (ch == '+')
+        {
+            out += ' ';
+            ++i;
+            continue;
+        }
 
         if (ch == '%' && i + 2 < s.length())
         {
@@ -135,22 +141,18 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 </html>)HTML";
 }
 
-// ✅ JUCE-version-safe query parsing (no URL::getParameterValue needed)
+// JUCE-version-safe query parsing (no URL::getParameterValue)
 String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl, const String& key)
 {
-    // Find '?'
     auto qPos = fullUrl.indexOfChar ('?');
-    if (qPos < 0)
-        return {};
+    if (qPos < 0) return {};
 
     auto query = fullUrl.substring (qPos + 1);
 
-    // Trim fragment if present
     auto hashPos = query.indexOfChar ('#');
     if (hashPos >= 0)
         query = query.substring (0, hashPos);
 
-    // Split key=value pairs
     StringArray pairs;
     pairs.addTokens (query, "&", "");
     pairs.trim();
@@ -162,7 +164,6 @@ String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl
         String k = (eq >= 0) ? p.substring (0, eq) : p;
         String v = (eq >= 0) ? p.substring (eq + 1) : "";
 
-        // URL decode both sides
         k = urlDecodeToString (k);
         v = urlDecodeToString (v);
 
@@ -175,15 +176,17 @@ String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl
 
 static String injectJuceBridge (String html)
 {
+    // This lets your HTML call: juce://set?param=gain&value=0.5
+    // Put this before </body> if possible.
     const String bridge = R"BRIDGE(
 <script>
-  window.JUCE = window.JUCE || {};
-  window.JUCE.setParam = function(param, value01) {
-    try {
-      var v = Math.max(0, Math.min(1, Number(value01)));
-      window.location.href = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(v);
-    } catch (e) {}
-  };
+(function(){
+  function juceSet(param, value01){
+    const u = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(String(value01));
+    window.location.href = u;
+  }
+  window.juceSet = juceSet;
+})();
 </script>
 )BRIDGE";
 
@@ -230,7 +233,7 @@ void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& 
 
 void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 {
-#if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
+   #if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
     String debug;
     debug << "BinaryData scan:\n";
 
@@ -240,7 +243,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         if (auto* data = BinaryData::getNamedResource (name.toRawUTF8(), size))
         {
             String text = String::fromUTF8 ((const char*) data, size);
-
             debug << " - " << name << " (" << String (size) << " bytes)\n";
 
             if (! looksLikeHtml (text))
@@ -281,31 +283,30 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
     }
 
     writeHtmlToTempAndLoad (makeMissingUiHtml (debug));
-#else
+   #else
     writeHtmlToTempAndLoad (makeMissingUiHtml ("JUCE_TARGET_HAS_BINARY_DATA is disabled."));
-#endif
+   #endif
 }
 
 // ============================================================
 // UI <-> DSP BRIDGE
-// Supported:
-//   juce://set?param=gain&value=0.5     (value is normalized 0..1)
+// juce://set?param=gain&value=0.5  (value normalized 0..1)
 // ============================================================
 bool HtmlToVstPluginAudioProcessorEditor::UiWebView::pageAboutToLoad (const String& newURL)
 {
     if (! newURL.startsWithIgnoreCase ("juce://"))
         return true;
 
-    // For juce://set?param=...&value=...
-    // We parse manually so it works across JUCE versions
     auto hostStart = String ("juce://").length();
-    auto hostEnd = newURL.indexOfChar ('?');
-    String host = (hostEnd > hostStart) ? newURL.substring (hostStart, hostEnd).toLowerCase()
-                                        : newURL.substring (hostStart).toLowerCase();
+    auto hostEnd   = newURL.indexOfChar ('?');
+
+    String host = (hostEnd > hostStart)
+        ? newURL.substring (hostStart, hostEnd).toLowerCase()
+        : newURL.substring (hostStart).toLowerCase();
 
     if (host == "set")
     {
-        auto param = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "param");
+        auto param    = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "param");
         auto valueStr = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "value");
 
         float v01 = (float) valueStr.getDoubleValue();
