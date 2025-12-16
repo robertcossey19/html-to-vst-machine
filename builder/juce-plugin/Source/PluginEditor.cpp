@@ -1,6 +1,5 @@
 #include "PluginEditor.h"
 
-// If BinaryData naming changes, these are common candidates:
 static const char* kUiCandidates[] =
 {
     "index.html",
@@ -23,7 +22,7 @@ HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlTo
     , audioProcessor (p)
     , webView (juce::WebBrowserComponent::Options{}
                  .withNativeIntegrationEnabled()
-                 .withKeepPageLoadedWhenBrowserIsHidden (true))
+                 .withKeepPageLoadedWhenBrowserIsHidden()) // <-- NO ARG in your JUCE
 {
     setOpaque (true);
     addAndMakeVisible (webView);
@@ -32,7 +31,6 @@ HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlTo
 
     loadUiFromBinaryData();
 
-    // If you later hook VU meters, this timer is where you’d push values into JS.
     startTimerHz (30);
 }
 
@@ -40,7 +38,6 @@ HtmlToVstPluginAudioProcessorEditor::~HtmlToVstPluginAudioProcessorEditor()
 {
     stopTimer();
 
-    // Best effort cleanup of temp file
     if (uiTempHtmlFile.existsAsFile())
         uiTempHtmlFile.deleteFile();
 }
@@ -57,13 +54,10 @@ void HtmlToVstPluginAudioProcessorEditor::resized()
 
 void HtmlToVstPluginAudioProcessorEditor::timerCallback()
 {
-    // NOTE:
-    // You said meters/toggles aren’t hooked yet. This is where we’ll push metering + state.
-    // For now we do nothing unless UI loaded.
     if (! uiLoaded)
         return;
 
-    // Example (when you add getters in the processor):
+    // When you expose RMS/peak from the processor, push it like this:
     // auto [l, r] = audioProcessor.getVuRms01();
     // webView.runJS ("window.setVUMeters && window.setVUMeters(" + juce::String(l) + "," + juce::String(r) + ");");
 }
@@ -74,7 +68,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
     const void* dataPtr = nullptr;
     juce::String pickedName;
 
-    // Try candidate names
     for (auto* name : kUiCandidates)
     {
         dataSize = 0;
@@ -95,13 +88,10 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
     else
     {
         html = juce::String::fromUTF8 (static_cast<const char*> (dataPtr), dataSize);
-
-        // Guard against “empty” or junk
         if (html.trim().isEmpty())
             html = makeFallbackHtml ("Embedded UI file was found (" + pickedName + ") but was empty.");
     }
 
-    // Write to temp file and load as file://
     uiTempHtmlFile = juce::File::getSpecialLocation (juce::File::tempDirectory)
                         .getNonexistentChildFile ("HtmlToVstUI", ".html", false);
 
@@ -109,7 +99,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 
     if (! ok)
     {
-        // If we can’t write, fall back to a data URL (still better than showing the escaped string)
         const auto dataUrl = "data:text/html;charset=utf-8," + juce::URL::addEscapeChars (html, true);
         webView.goToURL (dataUrl);
         uiLoaded = true;
