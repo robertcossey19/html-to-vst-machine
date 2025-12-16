@@ -1,27 +1,56 @@
 #pragma once
 
-#include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
-#include "PluginProcessor.h"
-
-class HtmlToVstPluginAudioProcessorEditor final : public juce::AudioProcessorEditor
+class HtmlToVstPluginAudioProcessor final : public juce::AudioProcessor
 {
 public:
-    explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
-    ~HtmlToVstPluginAudioProcessorEditor() override = default;
+    HtmlToVstPluginAudioProcessor();
+    ~HtmlToVstPluginAudioProcessor() override = default;
 
-    void paint (juce::Graphics&) override;
-    void resized() override;
+    //==============================================================================
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+
+   #ifndef JucePlugin_PreferredChannelConfigurations
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+   #endif
+
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    //==============================================================================
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override;
+
+    //==============================================================================
+    const juce::String getName() const override;
+
+    bool acceptsMidi() const override;
+    bool producesMidi() const override;
+    bool isMidiEffect() const override;
+    double getTailLengthSeconds() const override;
+
+    //==============================================================================
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
+
+    //==============================================================================
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    //==============================================================================
+    juce::AudioProcessorValueTreeState apvts;
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
-    HtmlToVstPluginAudioProcessor& processor;
+    // Simple “drive” DSP chain (input gain -> waveshaper -> output gain)
+    juce::dsp::Gain<float> inGain, outGain;
+    juce::dsp::WaveShaper<float> driveShaper;
 
-    juce::Slider inGain, drive, outGain;
-    juce::Label  inLbl, driveLbl, outLbl;
-
-    using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<Attachment> inAtt, driveAtt, outAtt;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessor)
 };
