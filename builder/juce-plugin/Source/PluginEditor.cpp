@@ -1,64 +1,62 @@
 #include "PluginEditor.h"
 
-static void styleKnob (juce::Slider& s)
+static void styleSlider (juce::Slider& s)
 {
     s.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
 }
 
 HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor& p)
-: AudioProcessorEditor (&p), processor (p)
+    : juce::AudioProcessorEditor (&p),
+      proc (p)
 {
-    styleKnob (inGain);
-    styleKnob (drive);
-    styleKnob (outGain);
+    title.setText ("HTMLtoVST (Fallback UI)", juce::dontSendNotification);
+    title.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (title);
 
-    inLbl.setText ("IN", juce::dontSendNotification);
-    driveLbl.setText ("DRIVE", juce::dontSendNotification);
-    outLbl.setText ("OUT", juce::dontSendNotification);
+    styleSlider (inGain);
+    styleSlider (drive);
+    styleSlider (outGain);
 
-    for (auto* l : { &inLbl, &driveLbl, &outLbl })
-    {
-        l->setJustificationType (juce::Justification::centred);
-        addAndMakeVisible (*l);
-    }
+    inGain.setName ("Input");
+    drive.setName ("Drive");
+    outGain.setName ("Output");
 
     addAndMakeVisible (inGain);
     addAndMakeVisible (drive);
     addAndMakeVisible (outGain);
 
-    inAtt    = std::make_unique<Attachment> (processor.apvts, "inGain",  inGain);
-    driveAtt = std::make_unique<Attachment> (processor.apvts, "drive",   drive);
-    outAtt   = std::make_unique<Attachment> (processor.apvts, "outGain", outGain);
+    inGainAtt  = std::make_unique<SliderAttachment> (proc.apvts, "inGain",  inGain);
+    driveAtt   = std::make_unique<SliderAttachment> (proc.apvts, "drive",   drive);
+    outGainAtt = std::make_unique<SliderAttachment> (proc.apvts, "outGain", outGain);
 
-    setSize (520, 220);
+    setSize (520, 260);
 }
 
 void HtmlToVstPluginAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff141414));
-    g.setColour (juce::Colours::white.withAlpha (0.9f));
-    g.setFont (15.0f);
-    g.drawText ("HTMLtoVST", 12, 10, getWidth() - 24, 20, juce::Justification::centredLeft);
+    g.fillAll (juce::Colours::black.withAlpha (0.92f));
+
+    g.setColour (juce::Colours::white.withAlpha (0.85f));
+    g.setFont (14.0f);
+    g.drawFittedText ("This build uses a minimal JUCE UI to ensure CI builds.\n"
+                      "Next step: re-add the HTML UI safely once builds are green.",
+                      getLocalBounds().reduced (12).removeFromBottom (60),
+                      juce::Justification::centred, 3);
 }
 
 void HtmlToVstPluginAudioProcessorEditor::resized()
 {
-    auto r = getLocalBounds().reduced (16);
-    r.removeFromTop (28);
+    auto r = getLocalBounds().reduced (12);
 
-    auto row = r.removeFromTop (170);
+    title.setBounds (r.removeFromTop (28));
 
-    auto colW = row.getWidth() / 3;
-    auto a = row.removeFromLeft (colW).reduced (10);
-    auto b = row.removeFromLeft (colW).reduced (10);
-    auto c = row.removeFromLeft (colW).reduced (10);
+    r.removeFromTop (10);
 
-    inLbl.setBounds    (a.removeFromTop (18));
-    driveLbl.setBounds (b.removeFromTop (18));
-    outLbl.setBounds   (c.removeFromTop (18));
+    auto row = r.removeFromTop (160);
+    auto w = row.getWidth() / 3;
 
-    inGain.setBounds  (a);
-    drive.setBounds   (b);
-    outGain.setBounds (c);
+    inGain.setBounds (row.removeFromLeft (w).reduced (10));
+    drive.setBounds  (row.removeFromLeft (w).reduced (10));
+    outGain.setBounds(row.removeFromLeft (w).reduced (10));
 }
