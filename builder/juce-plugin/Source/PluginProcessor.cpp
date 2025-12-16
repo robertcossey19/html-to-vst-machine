@@ -3,6 +3,13 @@
 
 using namespace juce;
 
+static inline float linToDbSafe (float lin)
+{
+    if (lin <= 0.0000001f)
+        return -100.0f;
+    return Decibels::gainToDecibels (lin, -100.0f);
+}
+
 HtmlToVstPluginAudioProcessor::HtmlToVstPluginAudioProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  AudioChannelSet::stereo(), true)
@@ -17,30 +24,26 @@ AudioProcessorValueTreeState::ParameterLayout HtmlToVstPluginAudioProcessor::cre
 {
     std::vector<std::unique_ptr<RangedAudioParameter>> params;
 
-    // Normalized parameters 0..1 (UI sends 0..1)
-    params.push_back (std::make_unique<AudioParameterFloat>(
-        ParameterID { "gain", 1 }, "Gain",
-        NormalisableRange<float> (0.0f, 1.0f, 0.0001f),
-        1.0f)); // default unity
+    // Normalized [0..1] floats (we’ll map to dB etc in processBlock)
+    params.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "inputGain",  1 }, "Input Gain",
+                                                             NormalisableRange<float> (0.0f, 1.0f, 0.0001f), 0.5f));
 
-    params.push_back (std::make_unique<AudioParameterFloat>(
-        ParameterID { "mix", 1 }, "Mix",
-        NormalisableRange<float> (0.0f, 1.0f, 0.0001f),
-        1.0f)); // default fully wet
+    params.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "outputGain", 1 }, "Output Gain",
+                                                             NormalisableRange<float> (0.0f, 1.0f, 0.0001f), 0.5f));
 
-    // Optional “drive” example param (won’t hurt if UI never uses it)
-    params.push_back (std::make_unique<AudioParameterFloat>(
-        ParameterID { "drive", 1 }, "Drive",
-        NormalisableRange<float> (0.0f, 1.0f, 0.0001f),
-        0.0f));
+    params.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "mix",        1 }, "Mix",
+                                                             NormalisableRange<float> (0.0f, 1.0f, 0.0001f), 1.0f));
+
+    params.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "drive",      1 }, "Drive",
+                                                             NormalisableRange<float> (0.0f, 1.0f, 0.0001f), 0.0f));
+
+    params.push_back (std::make_unique<AudioParameterBool>  (ParameterID { "transformer", 1 }, "Transformer", false));
+    params.push_back (std::make_unique<AudioParameterBool>  (ParameterID { "bypass",      1 }, "Bypass",      false));
 
     return { params.begin(), params.end() };
 }
 
-const String HtmlToVstPluginAudioProcessor::getName() const
-{
-    return JucePlugin_Name;
-}
+const String HtmlToVstPluginAudioProcessor::getName() const { return JucePlugin_Name; }
 
 bool HtmlToVstPluginAudioProcessor::acceptsMidi() const
 {
@@ -69,10 +72,7 @@ bool HtmlToVstPluginAudioProcessor::isMidiEffect() const
    #endif
 }
 
-double HtmlToVstPluginAudioProcessor::getTailLengthSeconds() const
-{
-    return 0.0;
-}
+double HtmlToVstPluginAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 
 int HtmlToVstPluginAudioProcessor::getNumPrograms() { return 1; }
 int HtmlToVstPluginAudioProcessor::getCurrentProgram() { return 0; }
@@ -88,6 +88,7 @@ bool HtmlToVstPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& l
 {
     const auto& in  = layouts.getMainInputChannelSet();
     const auto& out = layouts.getMainOutputChannelSet();
+
     if (in != out) return false;
     return (in == AudioChannelSet::mono() || in == AudioChannelSet::stereo());
 }
@@ -97,62 +98,97 @@ void HtmlToVstPluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, Mi
 {
     ScopedNoDenormals noDenormals;
 
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
+    const auto totalNumInputChannels  = getTotalNumInputChannels();
+    const auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+    for (int i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // Read normalized params
-    const float gain01  = apvts.getRawParameterValue ("gain")->load();   // 0..1
-    const float mix01   = apvts.getRawParameterValue ("mix")->load();    // 0..1
-    const float drive01 = apvts.getRawParameterValue ("drive")->load();  // 0..1
+    // Read params
+    const float in01   = apvts.getRawParameterValue ("inputGain")->load();
+    const float out01  = apvts.getRawParameterValue ("outputGain")->load();
+    const float mix01  = apvts.getRawParameterValue ("mix")->load();
+    const float drive01= apvts.getRawParameterValue ("drive")->load();
+    const bool  xfm    = (apvts.getRawParameterValue ("transformer")->load() > 0.5f);
+    const bool  byp    = (apvts.getRawParameterValue ("bypass")->load() > 0.5f);
 
-    // Map gain01 to a useful dB range (so the UI actually *feels* like a volume knob)
-    // -60 dB .. +12 dB
-    const float gainDb  = jmap (gain01, -60.0f, 12.0f);
-    const float gainLin = Decibels::decibelsToGain (gainDb);
+    // Map normalized [0..1] -> dB ranges
+    // Center (0.5) = 0 dB, left = -24 dB, right = +24 dB
+    const float inDb  = jmap (in01,  -24.0f, 24.0f);
+    const float outDb = jmap (out01, -24.0f, 24.0f);
 
-    // Simple soft clip “drive” (optional)
-    const float driveAmt = jmap (drive01, 1.0f, 8.0f);
+    const float inLin  = Decibels::decibelsToGain (inDb);
+    const float outLin = Decibels::decibelsToGain (outDb);
 
+    // Drive amount (subtle -> heavier)
+    const float driveAmt = jmap (drive01, 1.0f, 10.0f);
+
+    // Snapshot dry for mix/bypass
     AudioBuffer<float> dry;
     dry.makeCopyOf (buffer, true);
 
-    // Wet path = gain + optional drive
-    buffer.applyGain (gainLin);
-
-    if (drive01 > 0.0001f)
+    // Meter input (pre anything)
     {
+        float peak = 0.0f;
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            peak = jmax (peak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
+        inputMeterDb.store (linToDbSafe (peak));
+    }
+
+    if (! byp)
+    {
+        // Input gain
+        buffer.applyGain (inLin);
+
+        // “Transformer” coloration (simple but audible)
+        if (xfm || drive01 > 0.0001f)
         {
-            auto* p = buffer.getWritePointer (ch);
-            for (int n = 0; n < buffer.getNumSamples(); ++n)
+            const float sat = (xfm ? 1.25f : 1.0f) * driveAmt;
+
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
             {
-                const float x = p[n] * driveAmt;
-                // tanh soft clip
-                p[n] = std::tanh (x);
+                auto* p = buffer.getWritePointer (ch);
+                for (int n = 0; n < buffer.getNumSamples(); ++n)
+                {
+                    const float x = p[n] * sat;
+                    // tanh soft clip
+                    p[n] = std::tanh (x);
+                }
             }
         }
+
+        // Output gain
+        buffer.applyGain (outLin);
+
+        // Mix
+        const float wet = mix01;
+        const float dryAmtMix = 1.0f - wet;
+
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            auto* wetPtr = buffer.getWritePointer (ch);
+            auto* dryPtr = dry.getReadPointer (ch);
+
+            for (int n = 0; n < buffer.getNumSamples(); ++n)
+                wetPtr[n] = dryPtr[n] * dryAmtMix + wetPtr[n] * wet;
+        }
     }
-
-    // Mix: output = dry*(1-mix) + wet*mix
-    const float dryAmt = 1.0f - mix01;
-
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    else
     {
-        auto* wetPtr = buffer.getWritePointer (ch);
-        auto* dryPtr = dry.getReadPointer (ch);
+        // hard bypass -> original audio
+        buffer.makeCopyOf (dry, true);
+    }
 
-        for (int n = 0; n < buffer.getNumSamples(); ++n)
-            wetPtr[n] = dryPtr[n] * dryAmt + wetPtr[n] * mix01;
+    // Meter output
+    {
+        float peak = 0.0f;
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            peak = jmax (peak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
+        outputMeterDb.store (linToDbSafe (peak));
     }
 }
 
-bool HtmlToVstPluginAudioProcessor::hasEditor() const
-{
-    return true;
-}
+bool HtmlToVstPluginAudioProcessor::hasEditor() const { return true; }
 
 AudioProcessorEditor* HtmlToVstPluginAudioProcessor::createEditor()
 {
@@ -173,22 +209,49 @@ void HtmlToVstPluginAudioProcessor::setStateInformation (const void* data, int s
         apvts.replaceState (ValueTree::fromXml (*xml));
 }
 
+String HtmlToVstPluginAudioProcessor::canonicalParamId (String in)
+{
+    in = in.trim().toLowerCase();
+
+    // Common aliases from HTML UIs
+    if (in == "in" || in == "input" || in == "inputgain" || in == "ingain" || in == "input_gain")
+        return "inputGain";
+
+    if (in == "out" || in == "output" || in == "outputgain" || in == "outgain" || in == "output_gain")
+        return "outputGain";
+
+    if (in == "xfmr" || in == "xformer" || in == "transform" || in == "transformer" || in == "tx")
+        return "transformer";
+
+    if (in == "sat" || in == "saturation" || in == "drive")
+        return "drive";
+
+    if (in == "blend")
+        return "mix";
+
+    return in; // already canonical or unknown
+}
+
 void HtmlToVstPluginAudioProcessor::setParamNormalized (const String& paramID, float normalized01)
 {
+    const auto id = canonicalParamId (paramID);
     normalized01 = jlimit (0.0f, 1.0f, normalized01);
-    if (auto* p = apvts.getParameter (paramID))
+
+    if (auto* p = apvts.getParameter (id))
         p->setValueNotifyingHost (normalized01);
 }
 
 float HtmlToVstPluginAudioProcessor::getParamNormalized (const String& paramID) const
 {
-    if (auto* p = apvts.getParameter (paramID))
+    const auto id = canonicalParamId (paramID);
+
+    if (auto* p = apvts.getParameter (id))
         return p->getValue();
+
     return 0.0f;
 }
 
-//==============================================================================
-// JUCE needs this symbol in the final binary:
+// JUCE required factory symbol
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new HtmlToVstPluginAudioProcessor();
