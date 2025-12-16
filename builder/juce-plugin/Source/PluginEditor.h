@@ -3,8 +3,9 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class HtmlToVstPluginAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                                 private juce::Timer
+class HtmlToVstPluginAudioProcessorEditor final
+    : public juce::AudioProcessorEditor
+    , private juce::Timer
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
@@ -24,9 +25,9 @@ private:
 
         bool pageAboutToLoad (const juce::String& newURL) override;
 
+        // JUCE uses evaluateJavascript in this version
         void runJS (const juce::String& js)
         {
-            // JUCE uses evaluateJavascript in this version
             evaluateJavascript (js);
         }
 
