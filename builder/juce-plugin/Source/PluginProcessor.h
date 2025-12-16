@@ -2,7 +2,7 @@
 
 #include <JuceHeader.h>
 
-class HtmlToVstPluginAudioProcessor  : public juce::AudioProcessor
+class HtmlToVstPluginAudioProcessor : public juce::AudioProcessor
 {
 public:
     HtmlToVstPluginAudioProcessor();
@@ -42,14 +42,24 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    // UI <-> DSP bridge helpers
+    // UI <-> DSP bridge helpers (Editor calls these)
     void setParamNormalized (const juce::String& paramID, float normalized01);
     float getParamNormalized (const juce::String& paramID) const;
 
-    juce::AudioProcessorValueTreeState apvts;
+    // Meter taps for UI
+    float getInputMeterDb()  const noexcept { return inputMeterDb.load(); }
+    float getOutputMeterDb() const noexcept { return outputMeterDb.load(); }
 
+    juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    // Meter storage (updated in audio thread, read on message thread)
+    std::atomic<float> inputMeterDb  { -100.0f };
+    std::atomic<float> outputMeterDb { -100.0f };
+
+    // Small helper to map “whatever the HTML sends” -> real APVTS IDs
+    static juce::String canonicalParamId (juce::String in);
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessor)
 };
