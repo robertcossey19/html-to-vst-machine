@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class HtmlToVstPluginAudioProcessorEditor : public juce::AudioProcessorEditor
+class HtmlToVstPluginAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                            private juce::Timer
 {
 public:
     explicit HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor&);
@@ -13,33 +14,42 @@ public:
     void resized() override;
 
 private:
-    HtmlToVstPluginAudioProcessor& audioProcessor;
-
-    class UiWebView : public juce::WebBrowserComponent
+    // Small WebBrowser subclass so we can intercept navigation and inject JS
+    class Browser final : public juce::WebBrowserComponent
     {
     public:
-        explicit UiWebView (HtmlToVstPluginAudioProcessor& p) : audioProcessor (p) {}
-        bool pageAboutToLoad (const juce::String& newURL) override;
+        Browser();
+
+        std::function<bool (const juce::String&)> onAboutToLoad;
+        std::function<void (const juce::String&)> onFinished;
 
     private:
-        HtmlToVstPluginAudioProcessor& audioProcessor;
-        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (UiWebView)
+        bool pageAboutToLoad (const juce::String& newURL) override;
+        void pageFinishedLoading (const juce::String& url) override;
     };
 
-    UiWebView webView;
+    HtmlToVstPluginAudioProcessor& audioProcessor;
+    Browser webView;
 
     juce::File tempHtmlFile;
     bool uiLoaded = false;
 
-    static juce::String urlDecodeToString (const juce::String& s);
+    void timerCallback() override;
+
+    // UI loading
+    void loadUiFromBinaryData();
+    void writeHtmlToTempAndLoad (const juce::String& html);
+
+    // Bridge helpers
+    void injectBridgeJavascript();
+    void handleJuceUrl (const juce::String& urlString);
+
+    // Simple URL query parsing without relying on JUCE URL helpers that differ across versions
+    static juce::String getQueryParam (const juce::String& url, const juce::String& key);
+
+    static juce::String urlDecode (const juce::String& s);
     static bool looksLikeHtml (const juce::String& s);
     static juce::String makeMissingUiHtml (const juce::String& extra);
-
-    // JUCE-version-safe query parsing (works even if URL::getParameterValue is missing)
-    static juce::String getQueryParam (const juce::String& fullUrl, const juce::String& key);
-
-    void writeHtmlToTempAndLoad (const juce::String& html);
-    void loadUiFromBinaryData();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessorEditor)
 };
