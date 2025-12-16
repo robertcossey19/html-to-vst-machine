@@ -128,3 +128,8 @@ void HtmlToVstPluginAudioProcessor::setStateInformation (const void* data, int s
     if (xmlState && xmlState->hasTagName (apvts.state.getType()))
         apvts.replaceState (juce::ValueTree::fromXml (*xmlState));
 }
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new HtmlToVstPluginAudioProcessor();
+}
