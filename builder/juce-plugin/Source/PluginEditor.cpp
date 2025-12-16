@@ -1,9 +1,10 @@
 #include "PluginEditor.h"
 
+// Try both include styles depending on how CMake/JUCE exposes BinaryData.h
 #if __has_include("BinaryData.h")
- #include "BinaryData.h"
+  #include "BinaryData.h"
 #elif __has_include(<BinaryData.h>)
- #include <BinaryData.h>
+  #include <BinaryData.h>
 #endif
 
 using namespace juce;
@@ -21,20 +22,64 @@ static String trimStartFast (String s)
     return s;
 }
 
+//==============================================================================
+// Browser
+HtmlToVstPluginAudioProcessorEditor::Browser::Browser()
+    : WebBrowserComponent (WebBrowserComponent::Options{})
+{
+}
+
+bool HtmlToVstPluginAudioProcessorEditor::Browser::pageAboutToLoad (const String& newURL)
+{
+    if (onAboutToLoad)
+        return onAboutToLoad (newURL);
+    return true;
+}
+
+void HtmlToVstPluginAudioProcessorEditor::Browser::pageFinishedLoading (const String& url)
+{
+    if (onFinished)
+        onFinished (url);
+}
+
+//==============================================================================
+// Editor
 HtmlToVstPluginAudioProcessorEditor::HtmlToVstPluginAudioProcessorEditor (HtmlToVstPluginAudioProcessor& p)
     : AudioProcessorEditor (&p),
-      audioProcessor (p),
-      webView (p)
+      audioProcessor (p)
 {
     setOpaque (true);
-    addAndMakeVisible (webView);
 
+    addAndMakeVisible (webView);
     setSize (1100, 640);
+
+    // Intercept juce:// messages from injected JS
+    webView.onAboutToLoad = [this] (const String& url) -> bool
+    {
+        if (url.startsWithIgnoreCase ("juce://"))
+        {
+            handleJuceUrl (url);
+            return false; // cancel nav
+        }
+        return true;
+    };
+
+    // Inject JS after any page load
+    webView.onFinished = [this] (const String&)
+    {
+        injectBridgeJavascript();
+    };
+
     loadUiFromBinaryData();
+
+    // meter / polling timer
+    startTimerHz (20);
 }
 
 HtmlToVstPluginAudioProcessorEditor::~HtmlToVstPluginAudioProcessorEditor()
 {
+    stopTimer();
+
     if (tempHtmlFile.existsAsFile())
         tempHtmlFile.deleteFile();
 }
@@ -49,7 +94,31 @@ void HtmlToVstPluginAudioProcessorEditor::resized()
     webView.setBounds (getLocalBounds());
 }
 
-String HtmlToVstPluginAudioProcessorEditor::urlDecodeToString (const String& s)
+void HtmlToVstPluginAudioProcessorEditor::timerCallback()
+{
+    if (! uiLoaded)
+        return;
+
+    const float inDb  = audioProcessor.getInputMeterDb();
+    const float outDb = audioProcessor.getOutputMeterDb();
+
+    // If the HTML defines window.juceSetMeters(inDb,outDb), use it
+    // Otherwise try common element ids
+    String js;
+    js << "try {"
+       << "  if (window.juceSetMeters) { window.juceSetMeters(" << inDb << "," << outDb << "); }"
+       << "  var i=document.getElementById('meterIn');  if(i) i.style.width=Math.max(0,Math.min(100,((" << inDb << "+60)/60)*100))+'%';"
+       << "  var o=document.getElementById('meterOut'); if(o) o.style.width=Math.max(0,Math.min(100,((" << outDb << "+60)/60)*100))+'%';"
+       << "  var it=document.getElementById('meterInDb');  if(it) it.textContent=(" << inDb << ").toFixed(1)+' dB';"
+       << "  var ot=document.getElementById('meterOutDb'); if(ot) ot.textContent=(" << outDb << ").toFixed(1)+' dB';"
+       << "} catch(e) {}";
+
+    webView.executeJavascript (js);
+}
+
+//==============================================================================
+// Minimal URL decoding
+String HtmlToVstPluginAudioProcessorEditor::urlDecode (const String& s)
 {
     String out;
     out.preallocateBytes ((size_t) s.getNumBytesAsUTF8());
@@ -131,7 +200,7 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
   <div class="wrap">
     <div class="card">
       <h2>Embedded UI not found</h2>
-      <p>The plugin built, but no embedded HTML resource looked like a UI page.</p>
+      <p>No embedded HTML resource looked like a UI page.</p>
       <p>Details:</p>
       <code>)HTML" + extra + R"HTML(</code>
     </div>
@@ -140,177 +209,44 @@ String HtmlToVstPluginAudioProcessorEditor::makeMissingUiHtml (const String& ext
 </html>)HTML";
 }
 
-String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& fullUrl, const String& key)
+//==============================================================================
+// Query param parser that works regardless of JUCE URL API differences
+String HtmlToVstPluginAudioProcessorEditor::getQueryParam (const String& url, const String& key)
 {
-    auto qPos = fullUrl.indexOfChar ('?');
-    if (qPos < 0) return {};
+    const auto qPos = url.indexOfChar ('?');
+    if (qPos < 0)
+        return {};
 
-    auto query = fullUrl.substring (qPos + 1);
-    auto hashPos = query.indexOfChar ('#');
-    if (hashPos >= 0) query = query.substring (0, hashPos);
+    const auto query = url.substring (qPos + 1);
+    const auto parts = StringArray::fromTokens (query, "&", "");
 
-    StringArray pairs;
-    pairs.addTokens (query, "&", "");
-    pairs.trim();
-    pairs.removeEmptyStrings();
-
-    for (auto& p : pairs)
+    for (auto& part : parts)
     {
-        auto eq = p.indexOfChar ('=');
-        String k = (eq >= 0) ? p.substring (0, eq) : p;
-        String v = (eq >= 0) ? p.substring (eq + 1) : "";
+        const auto eq = part.indexOfChar ('=');
+        if (eq <= 0) continue;
 
-        k = urlDecodeToString (k);
-        v = urlDecodeToString (v);
+        const auto k = part.substring (0, eq);
+        const auto v = part.substring (eq + 1);
 
         if (k == key)
-            return v;
+            return urlDecode (v);
     }
 
     return {};
 }
 
-// Inject a JS bridge that supports:
-//  - juce://set?param=gain&value=0.5
-//  - Auto-bind sliders/inputs:
-//      * data-juce-param="gain"
-//      * id/name="gain" or "mix" or common aliases like "volume", "output", "level", "drywet", etc.
-static String injectJuceBridge (String html)
-{
-    const String bridge = R"BRIDGE(
-<script>
-(function(){
-  function clamp01(x){ x = Number(x); if (!isFinite(x)) return 0; return Math.max(0, Math.min(1, x)); }
-
-  function sendSet(param, value01){
-    if (!param) return;
-    var url = "juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(String(clamp01(value01)));
-    // Trigger navigation for JUCE interception
-    window.location.href = url;
-  }
-
-  // Expose explicit API for your UI JS if you want:
-  window.__JUCE = window.__JUCE || {};
-  window.__JUCE.setParam = sendSet;
-
-  function normFromElement(el){
-    var v = el.value;
-    var min = (el.min !== undefined && el.min !== "") ? Number(el.min) : 0;
-    var max = (el.max !== undefined && el.max !== "") ? Number(el.max) : 1;
-    var step = (el.step !== undefined && el.step !== "") ? Number(el.step) : 0;
-    var x = Number(v);
-    if (!isFinite(x)) x = 0;
-
-    if (isFinite(min) && isFinite(max) && max !== min){
-      // If element already uses 0..1, keep it
-      if (min === 0 && max === 1) return clamp01(x);
-      // Otherwise map to 0..1
-      return clamp01((x - min) / (max - min));
-    }
-    return clamp01(x);
-  }
-
-  function pickParamName(el){
-    // Highest priority: explicit attribute
-    var p = el.getAttribute("data-juce-param");
-    if (p) return p;
-
-    // Next: id/name heuristics
-    var id = (el.id || "").toLowerCase();
-    var nm = (el.name || "").toLowerCase();
-    var key = id || nm;
-    if (!key) return null;
-
-    // Direct matches
-    if (key === "gain" || key === "mix" || key === "drive") return key;
-
-    // Common aliases -> real params
-    var aliases = {
-      "volume":"gain", "output":"gain", "out":"gain", "level":"gain", "trim":"gain",
-      "master":"gain", "makeup":"gain", "makeupgain":"gain",
-      "drywet":"mix", "wetdry":"mix", "blend":"mix"
-    };
-    if (aliases[key]) return aliases[key];
-
-    // Contains-based fallbacks
-    if (key.indexOf("gain") >= 0 || key.indexOf("vol") >= 0 || key.indexOf("level") >= 0) return "gain";
-    if (key.indexOf("mix") >= 0 || key.indexOf("blend") >= 0 || key.indexOf("wet") >= 0) return "mix";
-    if (key.indexOf("drive") >= 0 || key.indexOf("sat") >= 0) return "drive";
-
-    return null;
-  }
-
-  function bindElement(el){
-    var param = pickParamName(el);
-    if (!param) return;
-
-    var handler = function(){
-      var v01 = normFromElement(el);
-      sendSet(param, v01);
-    };
-
-    el.addEventListener("input", handler);
-    el.addEventListener("change", handler);
-  }
-
-  function autoBind(){
-    var els = Array.prototype.slice.call(document.querySelectorAll("input, select"));
-    els.forEach(function(el){
-      // Only bind things that look like controls
-      var type = (el.type || "").toLowerCase();
-      var ok = (type === "range" || type === "number" || type === "checkbox" || type === "radio" || el.tagName.toLowerCase() === "select");
-      if (!ok) return;
-
-      // Checkbox -> 0/1
-      if (type === "checkbox"){
-        var p = pickParamName(el);
-        if (!p) return;
-        el.addEventListener("change", function(){
-          sendSet(p, el.checked ? 1 : 0);
-        });
-        return;
-      }
-
-      bindElement(el);
-    });
-  }
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoBind);
-  else autoBind();
-})();
-</script>
-)BRIDGE";
-
-    auto lower = html.toLowerCase();
-    auto idx = lower.lastIndexOf ("</body>");
-    if (idx >= 0)
-        html = html.substring (0, idx) + bridge + html.substring (idx);
-    else
-        html += bridge;
-
-    return html;
-}
-
-void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& inHtml)
+//==============================================================================
+// UI loading
+void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& html)
 {
     const auto fileName = "HtmlToVstUI_" + String::toHexString ((pointer_sized_int) this) + ".html";
     tempHtmlFile = File::getSpecialLocation (File::tempDirectory).getChildFile (fileName);
 
-    const auto html = injectJuceBridge (inHtml);
+    {
+        FileOutputStream out (tempHtmlFile);
+        if (! out.openedOk())
+            return;
 
-    FileOutputStream out (tempHtmlFile);
-    if (! out.openedOk())
-    {
-        const auto msg = "Failed to open temp file for UI:\n" + tempHtmlFile.getFullPathName();
-        FileOutputStream out2 (tempHtmlFile);
-        if (out2.openedOk())
-        {
-            out2.writeText (makeMissingUiHtml (msg), false, false, "\n");
-            out2.flush();
-        }
-    }
-    else
-    {
         out.setPosition (0);
         out.truncate();
         out.writeText (html, false, false, "\n");
@@ -324,7 +260,7 @@ void HtmlToVstPluginAudioProcessorEditor::writeHtmlToTempAndLoad (const String& 
 
 void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 {
-#if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
+   #if defined(JUCE_TARGET_HAS_BINARY_DATA) && JUCE_TARGET_HAS_BINARY_DATA
     String debug;
     debug << "BinaryData scan:\n";
 
@@ -341,7 +277,7 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
 
             auto t = trimStartFast (text);
             if (t.startsWithChar ('%') || t.containsIgnoreCase ("%3c"))
-                text = urlDecodeToString (text);
+                text = urlDecode (text);
 
             if (! looksLikeHtml (text))
                 return false;
@@ -352,7 +288,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         return false;
     };
 
-    // Prefer html-ish names
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -364,7 +299,6 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
         }
     }
 
-    // Fallback: brute force
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (auto* nm = BinaryData::namedResourceList[i])
@@ -376,38 +310,133 @@ void HtmlToVstPluginAudioProcessorEditor::loadUiFromBinaryData()
     }
 
     writeHtmlToTempAndLoad (makeMissingUiHtml (debug));
-#else
+   #else
     writeHtmlToTempAndLoad (makeMissingUiHtml ("JUCE_TARGET_HAS_BINARY_DATA is disabled."));
-#endif
+   #endif
 }
 
-// ============================================================
-// UI <-> DSP BRIDGE
-// juce://set?param=gain&value=0.5  (value normalized 0..1)
-// ============================================================
-bool HtmlToVstPluginAudioProcessorEditor::UiWebView::pageAboutToLoad (const String& newURL)
+//==============================================================================
+// Bridge: JS -> C++ via juce://set?param=ID&value=0..1
+void HtmlToVstPluginAudioProcessorEditor::handleJuceUrl (const String& urlString)
 {
-    if (! newURL.startsWithIgnoreCase ("juce://"))
-        return true;
+    // Examples:
+    // juce://set?param=inputGain&value=0.52
+    // juce://toggle?param=transformer&value=1
+    const auto host = urlString.fromFirstOccurrenceOf ("juce://", false, false)
+                              .upToFirstOccurrenceOf ("?", false, false)
+                              .toLowerCase();
 
-    auto hostStart = String ("juce://").length();
-    auto hostEnd   = newURL.indexOfChar ('?');
-    String host    = (hostEnd > hostStart) ? newURL.substring (hostStart, hostEnd).toLowerCase()
-                                          : newURL.substring (hostStart).toLowerCase();
+    const auto param = getQueryParam (urlString, "param");
+    const auto value = getQueryParam (urlString, "value");
 
-    if (host == "set")
-    {
-        auto param    = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "param");
-        auto valueStr = HtmlToVstPluginAudioProcessorEditor::getQueryParam (newURL, "value");
+    if (param.isEmpty())
+        return;
 
-        float v01 = (float) valueStr.getDoubleValue();
-        v01 = jlimit (0.0f, 1.0f, v01);
+    const float v = value.isNotEmpty() ? (float) value.getDoubleValue() : 0.0f;
 
-        if (param.isNotEmpty())
-            audioProcessor.setParamNormalized (param, v01);
+    if (host == "set" || host == "toggle")
+        audioProcessor.setParamNormalized (param, jlimit (0.0f, 1.0f, v));
+}
 
-        return false;
+// Inject a generic hook layer so “moving knobs” actually changes APVTS
+void HtmlToVstPluginAudioProcessorEditor::injectBridgeJavascript()
+{
+    // This script:
+    // 1) defines window.juce.setParam / toggleParam
+    // 2) auto-hooks:
+    //    - elements with data-param
+    //    - common ids/names: input, output, gain, mix, drive, transformer, bypass
+    // 3) provides window.juceSetMeters(inDb,outDb) fallback if HTML wants it
+    const String js = R"JS(
+(function(){
+  try {
+    if (window.juce && window.juce.__installed) return;
+
+    function nav(u){ window.location.href = u; }
+
+    window.juce = {
+      __installed: true,
+      setParam: function(param, value){
+        nav("juce://set?param=" + encodeURIComponent(param) + "&value=" + encodeURIComponent(value));
+      },
+      toggleParam: function(param, on){
+        nav("juce://toggle?param=" + encodeURIComponent(param) + "&value=" + (on ? "1" : "0"));
+      }
+    };
+
+    function hookEl(el, param){
+      if (!el || !param) return;
+
+      var tag = (el.tagName || "").toLowerCase();
+      var type = (el.type || "").toLowerCase();
+
+      var send = function(){
+        if (type === "checkbox" || type === "radio") {
+          window.juce.toggleParam(param, !!el.checked);
+        } else {
+          var v = parseFloat(el.value);
+          if (!isFinite(v)) v = 0;
+          // If UI uses 0..100 or -60..+12 etc, clamp to 0..1 best-effort:
+          if (v > 1.0001) v = v / 100.0;
+          if (v < 0) v = 0;
+          if (v > 1) v = 1;
+          window.juce.setParam(param, v);
+        }
+      };
+
+      el.addEventListener("input", send);
+      el.addEventListener("change", send);
     }
 
-    return false;
+    // 1) data-param
+    document.querySelectorAll("[data-param]").forEach(function(el){
+      hookEl(el, el.getAttribute("data-param"));
+    });
+
+    // 2) common ids/names -> canonical param IDs
+    var map = {
+      "input": "inputGain",
+      "inputgain": "inputGain",
+      "in": "inputGain",
+      "output": "outputGain",
+      "outputgain": "outputGain",
+      "out": "outputGain",
+      "gain": "outputGain",
+      "mix": "mix",
+      "drive": "drive",
+      "saturation": "drive",
+      "transformer": "transformer",
+      "xfmr": "transformer",
+      "bypass": "bypass"
+    };
+
+    Object.keys(map).forEach(function(k){
+      var id = document.getElementById(k);
+      if (id) hookEl(id, map[k]);
+
+      document.querySelectorAll("[name='"+k+"']").forEach(function(el){
+        hookEl(el, map[k]);
+      });
+    });
+
+    // Optional: meters helper (if the HTML defines #vuIn/#vuOut, etc.)
+    window.juceSetMeters = function(inDb, outDb){
+      try {
+        // if the UI uses needles, it can override this function.
+        var clamp = function(x){ return Math.max(-60, Math.min(12, x)); };
+        var inC = clamp(inDb), outC = clamp(outDb);
+
+        var a = document.getElementById("vuIn");
+        var b = document.getElementById("vuOut");
+        if (a) a.style.transform = "rotate(" + ((inC + 60) / 72 * 90 - 45) + "deg)";
+        if (b) b.style.transform = "rotate(" + ((outC + 60) / 72 * 90 - 45) + "deg)";
+      } catch(e) {}
+    };
+  } catch(e) {}
+})();
+)JS";
+
+    webView.executeJavascript (js);
 }
+
+//==============================================================================
