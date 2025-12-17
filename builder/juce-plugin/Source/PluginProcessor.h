@@ -48,8 +48,8 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
-    // Simple “drive” DSP chain (input gain -> waveshaper -> output gain)
-    juce::dsp::Gain<float> inGain, outGain;
+    // DSP chain: inGain -> driveGain -> tanh -> outGain
+    juce::dsp::Gain<float> inGain, driveGain, outGain;
     juce::dsp::WaveShaper<float> driveShaper;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HtmlToVstPluginAudioProcessor)
