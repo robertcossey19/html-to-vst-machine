@@ -16,7 +16,6 @@ public:
     void resized() override;
 
 private:
-    // A tiny WebBrowser subclass so we can intercept custom "juce://" URLs.
     class Browser final : public juce::WebBrowserComponent
     {
     public:
@@ -27,27 +26,19 @@ private:
         HtmlToVstPluginAudioProcessorEditor& owner;
     };
 
-    // URL handler for messages from the HTML UI
     bool handleBrowserURL (const juce::String& url);
 
-    // JS send helpers (called on message thread)
     void sendAllParamsToJS();
     void sendParamToJS (const juce::String& paramID, float value);
 
-    // APVTS listener
     void parameterChanged (const juce::String& parameterID, float newValue) override;
-
-    // Timer (message thread) to safely push param changes -> JS
     void timerCallback() override;
 
-    // Loads HTML either from BinaryData (preferred) or embedded fallback
     static juce::String getIndexHtml();
 
     HtmlToVstPluginAudioProcessor& audioProcessor;
-
     std::unique_ptr<Browser> browser;
 
-    // atomics updated on audio thread, pushed to UI on timer
     std::atomic<float> inGainValue  { 0.0f };
     std::atomic<float> driveValue   { 0.0f };
     std::atomic<float> outGainValue { 0.0f };
