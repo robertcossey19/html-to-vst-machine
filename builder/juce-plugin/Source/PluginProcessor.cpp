@@ -1,9 +1,17 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <cmath>
+
 static float dbToGainSafe (float db)
 {
     return juce::Decibels::decibelsToGain (db, -80.0f);
+}
+
+// IMPORTANT: non-capturing function (JUCE WaveShaper may require function pointer)
+static float tanhShaper (float x)
+{
+    return std::tanh (x);
 }
 
 HtmlToVstPluginAudioProcessor::HtmlToVstPluginAudioProcessor()
@@ -12,8 +20,8 @@ HtmlToVstPluginAudioProcessor::HtmlToVstPluginAudioProcessor()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
-    // Waveshaper default
-    driveShaper.functionToUse = [] (float x) { return std::tanh (x); };
+    // Use a plain function pointer (works with older JUCE)
+    driveShaper.functionToUse = tanhShaper;
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -66,10 +74,12 @@ void HtmlToVstPluginAudioProcessor::prepareToPlay (double sampleRate, int sample
     spec.numChannels = (juce::uint32) juce::jmax (1, getTotalNumOutputChannels());
 
     inGain.prepare (spec);
-    outGain.prepare (spec);
+    driveGain.prepare (spec);
     driveShaper.prepare (spec);
+    outGain.prepare (spec);
 
     inGain.setRampDurationSeconds (0.01);
+    driveGain.setRampDurationSeconds (0.01);
     outGain.setRampDurationSeconds (0.01);
 }
 
@@ -86,7 +96,6 @@ bool HtmlToVstPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& l
     if (mainOut != juce::AudioChannelSet::mono() && mainOut != juce::AudioChannelSet::stereo())
         return false;
 
-    // Require symmetrical in/out
     return mainOut == mainIn;
 }
 #endif
@@ -109,14 +118,15 @@ void HtmlToVstPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buff
     inGain.setGainLinear  (dbToGainSafe (inDb));
     outGain.setGainLinear (dbToGainSafe (outDb));
 
-    // Scale waveshaper input amount with drive
+    // Drive scaling happens via a gain stage BEFORE the waveshaper (no capturing lambda!)
     const float k = 1.0f + 12.0f * juce::jlimit (0.0f, 1.0f, drive); // 1x..13x
-    driveShaper.functionToUse = [k] (float x) { return std::tanh (x * k); };
+    driveGain.setGainLinear (k);
 
     juce::dsp::AudioBlock<float> block (buffer);
     auto ctx = juce::dsp::ProcessContextReplacing<float> (block);
 
     inGain.process (ctx);
+    driveGain.process (ctx);
     driveShaper.process (ctx);
     outGain.process (ctx);
 }
